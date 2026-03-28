@@ -3,8 +3,8 @@
 Rekonstrukce CNN Fear & Greed Indexu ze 7 veřejných datových zdrojů (1998–2026)
 a backtesting algoritmických obchodních strategií na S&P 500 Total Return.
 
-**Autor:** Petr Amler (AML0005)
-**Instituce:** VŠB-TU Ostrava, Ekonomická fakulta, Financí
+**Autor:** Petr Amler
+**Instituce:** VŠB-TU Ostrava, Ekonomická fakulta, katedra financí
 **Typ:** Diplomová práce (navazuje na semestrální práci)
 
 ---
