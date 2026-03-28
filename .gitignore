@@ -1,0 +1,13 @@
+# Velké datové soubory (přes 100MB limit GitHubu)
+strategy/grid_results.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
