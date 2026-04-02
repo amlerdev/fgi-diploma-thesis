@@ -5,7 +5,7 @@ Detailní analýza a vizualizace výsledků — unified grid search.
 
 Strategie vybrány podle nejlepšího OOS Total Return:
   - Buy & Hold (benchmark, S&P 500 Total Return)
-  - MR Long+MA  FG_Equal  entry=28, exit=92, fast=16, slow=100  (OOS 231%)
+  - MR Long+MA  FG_Equal  entry=28, exit=92, fast=17, slow=95   (OOS 197%)
   - MR Long     FG_OLS    entry=48, exit=79                      (OOS 222%)
   - Mom Long    FG_Equal  entry=39, exit=32                      (OOS 167%, Sharpe 0.87)
   - Mom Long    FG_OLS    entry=85, exit=7                       (OOS 120%, DD -18.8%)
@@ -61,10 +61,10 @@ dates  = df.index
 fg_eq  = df['FG_Equal'].ffill().values
 fg_ols = df['FG_OLS'].ffill().values
 
-# MA pro MR Long+MA FG_Equal (fast=16, slow=100)
+# MA pro MR Long+MA FG_Equal (fast=17, slow=95)
 fg_eq_s = df['FG_Equal'].ffill()
-ma16    = fg_eq_s.rolling(16,  min_periods=1).mean().values
-ma100   = fg_eq_s.rolling(100, min_periods=1).mean().values
+ma17    = fg_eq_s.rolling(17,  min_periods=17).mean().values
+ma95    = fg_eq_s.rolling(95,  min_periods=95).mean().values
 
 is_mask  = dates <= IS_END
 oos_mask = dates >= OOS_START
@@ -128,7 +128,7 @@ def metrics(equity, trades, base=None):
 # ── Výpočet equity křivek ─────────────────────────────────────────────────────
 strategies = {
     'Buy & Hold':        (INITIAL * prices / prices[0],                         0),
-    'MR+MA FG_Equal':   mr_long_ma(prices, fg_eq,  28, 92, ma16, ma100),
+    'MR+MA FG_Equal':   mr_long_ma(prices, fg_eq,  28, 92, ma17, ma95),
     'MR Long FG_OLS':   mr_long(prices,    fg_ols, 48, 79),
     'Mom Long FG_Equal': mom_long(prices,  fg_eq,  39, 32),
     'Mom Long FG_OLS':  mom_long(prices,   fg_ols, 85,  7),

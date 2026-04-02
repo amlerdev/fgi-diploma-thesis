@@ -165,8 +165,8 @@ def run_period(df_period, row):
 
     if strategy in MA_STRATEGIES:
         fg_series = df_period[fgv].ffill()
-        maf = fg_series.rolling(int(row['fast_ma']), min_periods=1).mean().values
-        mas = fg_series.rolling(int(row['slow_ma']), min_periods=1).mean().values
+        maf = fg_series.rolling(int(row['fast_ma']), min_periods=int(row['fast_ma'])).mean().values
+        mas = fg_series.rolling(int(row['slow_ma']), min_periods=int(row['slow_ma'])).mean().values
         if strategy == 'mr_long_ma':
             eq, tr = mr_long_ma(pr, fg, e, x, maf, mas)
         else:
