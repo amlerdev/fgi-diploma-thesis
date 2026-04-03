@@ -65,7 +65,7 @@ print(f"!VMCSUMNYA: {raw_signal.index[0].date()} → {raw_signal.index[-1].date(
 # ── ČÁST 3: Normalize + Save ──────────────────────────────────────────────────
 def rolling_zscore(series, window):
     rm = series.rolling(window, min_periods=window // 2).mean()
-    rs = series.rolling(window, min_periods=window // 2).std()
+    rs = series.rolling(window, min_periods=window // 2).std(ddof=0)
     return ((series - rm) / rs * 25 + 50).clip(0, 100)
 
 nysi_norm = rolling_zscore(raw_signal, BEST_WINDOW)

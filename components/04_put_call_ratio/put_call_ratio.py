@@ -74,7 +74,7 @@ print(f"$CPC: {raw_signal.index[0].date()} → {raw_signal.index[-1].date()}  ({
 # Vysoký put/call = strach = nízké skóre → inverse=True
 def rolling_zscore(series, window, inverse=False):
     rm = series.rolling(window, min_periods=window // 2).mean()
-    rs = series.rolling(window, min_periods=window // 2).std()
+    rs = series.rolling(window, min_periods=window // 2).std(ddof=0)
     z  = (series - rm) / rs
     if inverse:
         z = -z

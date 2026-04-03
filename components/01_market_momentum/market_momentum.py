@@ -2,10 +2,10 @@
 market_momentum.py
 ==================
 Component #1: Market Momentum
-Formula: (SP500 - MA125) / MA125 × 100  (procentuální odchylka od 125-denního průměru)
+Formula: SP500 - MA125  (absolutní rozdíl od 125-denního průměru)
 CNN metodika: "S&P 500 above/below its 125-day moving average" — přesný vzorec nespecifikován
 Normalization: Rolling Z-score, window=63d (~3 months)
-Correlation with CNN FGI: r=0.832 (2011-2026, n=3826)
+Correlation with CNN FGI: r=0.832 (grid search, diff+zscore 63d)
 Data source: Yahoo Finance (^GSPC) — FREE
 
 Grid search: viz market_momentum_grid.py
@@ -29,13 +29,13 @@ print(f"^GSPC: {sp500.index[0].date()} → {sp500.index[-1].date()}  ({len(sp500
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
 ma125 = sp500.rolling(125).mean()
-raw_signal = ((sp500 - ma125) / ma125 * 100).dropna()
-raw_signal.name = 'Momentum_Pct'
+raw_signal = (sp500 - ma125).dropna()
+raw_signal.name = 'Momentum_Diff'
 
 # ── ČÁST 3: Normalize + Save ──────────────────────────────────────────────────
 def rolling_zscore(series, window):
     rm = series.rolling(window, min_periods=window // 2).mean()
-    rs = series.rolling(window, min_periods=window // 2).std()
+    rs = series.rolling(window, min_periods=window // 2).std(ddof=0)
     return ((series - rm) / rs * 25 + 50).clip(0, 100)
 
 mom_norm = rolling_zscore(raw_signal, BEST_WINDOW)

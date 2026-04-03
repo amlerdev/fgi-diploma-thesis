@@ -79,7 +79,7 @@ print(f"Raw signal: {raw_signal.index[0].date()} → {raw_signal.index[-1].date(
 # ── ČÁST 3: Normalize + Save ──────────────────────────────────────────────────
 def rolling_zscore(series, window, inverse=False):
     rm = series.rolling(window, min_periods=window // 2).mean()
-    rs = series.rolling(window, min_periods=window // 2).std()
+    rs = series.rolling(window, min_periods=window // 2).std(ddof=0)
     z  = (series - rm) / rs
     if inverse:
         z = -z

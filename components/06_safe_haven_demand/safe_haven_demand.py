@@ -56,7 +56,7 @@ print(f"Range: {raw_signal.min():.2f}% to {raw_signal.max():.2f}%")
 # Akcie > dluhopisy = greed = vysoké skóre → NO inverse
 def rolling_zscore(series, window, inverse=False):
     rm = series.rolling(window, min_periods=window // 2).mean()
-    rs = series.rolling(window, min_periods=window // 2).std()
+    rs = series.rolling(window, min_periods=window // 2).std(ddof=0)
     z  = (series - rm) / rs
     if inverse:
         z = -z
