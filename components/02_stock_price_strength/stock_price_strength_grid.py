@@ -16,12 +16,12 @@ _dir = Path(__file__).resolve().parent
 CNN_CSV = _dir / '../../data/fear_greed_historical.csv'
 
 # ── Data ─────────────────────────────────────────────────────────────────────
-df = pd.read_csv(_dir / 'stock_price_strength_1980_2026.csv', parse_dates=['Date'], index_col='Date')
-df.index = df.index.normalize()
-
-# Timestamp fix pro případ že index má čas
-nyhgh = df['NYHGH'].dropna()
-nylow = df['NYLOW'].dropna()
+nyhgh = pd.read_csv(_dir / 'nyhgh_1980_2026.csv', parse_dates=['Date'], index_col='Date')['Close']
+nylow = pd.read_csv(_dir / 'nylow_1980_2026.csv', parse_dates=['Date'], index_col='Date')['Close']
+nyhgh.index = nyhgh.index.normalize()
+nylow.index = nylow.index.normalize()
+nyhgh = nyhgh.dropna()
+nylow = nylow.dropna()
 
 common = nyhgh.index.intersection(nylow.index)
 nyhgh = nyhgh.loc[common]

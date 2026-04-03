@@ -19,7 +19,7 @@ BEST_WINDOW = 1512  # ~6 let — nejlepší korelace r=0.644; VIX spiky potřebu
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji VIX (^VIX) z Yahoo Finance...")
-vix_dl  = yf.download('^VIX', start='1990-01-01', end='2026-12-31', progress=False)
+vix_dl  = yf.download('^VIX', start='1990-01-01', end='2026-03-20', progress=False)
 vix_raw = vix_dl['Close'].iloc[:, 0] if isinstance(vix_dl['Close'], pd.DataFrame) else vix_dl['Close']
 vix_raw.index = pd.to_datetime(vix_raw.index)
 

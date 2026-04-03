@@ -44,7 +44,7 @@ if vix_csv.exists():
     print(f"Nacteno z CSV: {len(vix)} dni  ({vix.index[0].date()} → {vix.index[-1].date()})")
 else:
     print("Stahuji VIX (^VIX) z Yahoo Finance...")
-    raw = yf.download('^VIX', start='1990-01-01', end='2026-12-31', progress=False)
+    raw = yf.download('^VIX', start='1990-01-01', end='2026-03-20', progress=False)
     vix = raw['Close'].iloc[:, 0] if isinstance(raw['Close'], pd.DataFrame) else raw['Close']
     vix.index = pd.to_datetime(vix.index)
     raw.to_csv(vix_csv)

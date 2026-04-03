@@ -39,7 +39,7 @@ from datetime import datetime
 
 TICKER      = "$NYHGH"          # StockCharts ticker
 DATE_FROM   = "19800101"        # Začátek období (YYYYMMDD)
-DATE_TO     = datetime.now().strftime('%Y%m%d')  # Konec období (aktuální datum)
+DATE_TO     = "20260320"  # Konec období (fixed)
 OUTPUT_FILE = "output_data.csv" # Výstupní soubor
 
 # =============================================================================

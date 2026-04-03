@@ -6,11 +6,9 @@ CNN říká: "Put/Call Ratio — bearish vs bullish options"
 Vysoký ratio = více put opcí = strach → inverse normalizace
 
 Indikátory:
-  $CPC   — CBOE Total Put/Call Ratio (equity + index options)
-  $CPCE  — CBOE Equity-Only Put/Call Ratio (čistší retail sentiment)
-  $CPCI  — CBOE Index-Only Put/Call Ratio (institucionální hedging)
+  $CPC   — CBOE Total Put/Call Ratio (equity + index options), dostupný od ~1995
 
-Celkem: 3 indikátory × 5 MA oken × 3 metody × 12 oken = 540 kombinací
+Celkem: 1 indikátor × 5 MA oken × 3 metody × 12 oken = 180 kombinací
 Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 """
 
@@ -34,7 +32,7 @@ def download_quotebrain(symbol, save_path):
     params = {
         'symbol': symbol,
         'start': '19950101',
-        'end': datetime.now().strftime('%Y%m%d'),
+        'end': '20260320',
         'windowid': 'main', 'chartid': 'main',
         'fromde': 'false', 'numCharts': '1', 'numWindows': '1',
         'appv': '1.91', 'z': 'true', 'extended': 'true',
@@ -56,11 +54,9 @@ def download_quotebrain(symbol, save_path):
     print(f"  Stazeno {len(df)} dni  ({df['Date'].min().date()} -> {df['Date'].max().date()})")
     return df
 
-# ── Načtení / download indikátorů ─────────────────────────────────────────────
+# ── Načtení / download indikátoru ─────────────────────────────────────────────
 INDICATORS = {
-    '$CPC' : 'put_call_cpc_1995_2026.csv',
-    '$CPCE': 'put_call_cpce_1995_2026.csv',
-    '$CPCI': 'put_call_cpci_1995_2026.csv',
+    '$CPC': 'put_call_cpc_1995_2026.csv',
 }
 
 raw_data = {}
@@ -152,8 +148,6 @@ for symbol, series in raw_data.items():
 
 # ── Výsledek ──────────────────────────────────────────────────────────────────
 results.sort(key=lambda x: x['r'], reverse=True)
-print(f"\n  Původní verze ($CPC, MA5, Z-score 252d): r=0.641")
-print(f"  Aktuální verze ($CPCE, MA5, Z-score 252d): r=0.645")
 
 if results:
     best = results[0]

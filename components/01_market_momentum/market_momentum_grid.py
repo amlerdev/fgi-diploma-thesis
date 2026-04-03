@@ -35,7 +35,7 @@ SIGNAL_TYPES = {
 
 # ── ČÁST 1: Data ──────────────────────────────────────────────────────────────
 print("Stahuji ^GSPC (S&P 500 price index)...")
-sp500_raw = yf.download('^GSPC', start='1995-01-01', end='2026-12-31', progress=False)['Close']
+sp500_raw = yf.download('^GSPC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
 sp500_raw.index = pd.to_datetime(sp500_raw.index)
 sp500 = sp500_raw.iloc[:, 0] if isinstance(sp500_raw, pd.DataFrame) else sp500_raw
 

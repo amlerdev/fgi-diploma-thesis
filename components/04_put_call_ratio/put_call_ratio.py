@@ -25,7 +25,7 @@ def download_quotebrain(symbol, save_path):
     params = {
         'symbol': symbol,
         'start': '19950101',
-        'end': datetime.now().strftime('%Y%m%d'),
+        'end': '20260320',
         'windowid': 'main', 'chartid': 'main',
         'fromde': 'false', 'numCharts': '1', 'numWindows': '1',
         'appv': '1.91', 'z': 'true', 'extended': 'true',

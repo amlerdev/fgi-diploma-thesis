@@ -54,6 +54,7 @@ for i, (folder, filename, col) in enumerate(COMPONENTS, start=2):
     path = COMP_DIR / folder / filename
     print(f"\n[{i}/9] {col}  ←  {folder}/{filename}")
     series = pd.read_csv(path, parse_dates=['Date'], index_col='Date')[col]
+    series.index = series.index.normalize()
     df = df.join(series, how='left')
     valid = series.dropna()
     print(f"   {len(valid)} platných hodnot  ({valid.index[0].date()} → {valid.index[-1].date()})")

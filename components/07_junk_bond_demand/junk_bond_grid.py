@@ -44,7 +44,7 @@ ETF_TICKERS = {
 etf_data = {}
 for ticker, name in ETF_TICKERS.items():
     try:
-        raw = yf.download(ticker, start='1995-01-01', end='2026-12-31', progress=False)['Close']
+        raw = yf.download(ticker, start='1995-01-01', end='2026-03-20', progress=False)['Close']
         raw.index = pd.to_datetime(raw.index)
         s = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
         s = s.dropna()
@@ -61,13 +61,12 @@ if HAS_PDR:
     FRED_SERIES = {
         'BAMLH0A0HYM2'  : 'ICE BofA HY OAS (vs Treasury)',
         'BAMLH0A1HYBB'  : 'ICE BofA BB OAS',
-        'BAMLH0A2HYBBB' : 'ICE BofA BB-B OAS',
         'BAMLC0A4CBBB'  : 'ICE BofA BBB OAS',
         'BAMLC0A3CA'    : 'ICE BofA A OAS',
     }
     for series_id, name in FRED_SERIES.items():
         try:
-            df = web.DataReader(series_id, 'fred', '1995-01-01', '2026-12-31')
+            df = web.DataReader(series_id, 'fred', '1995-01-01', '2026-03-20')
             s = df.iloc[:, 0].dropna()
             s.index = pd.to_datetime(s.index)
             s.index.name = 'Date'

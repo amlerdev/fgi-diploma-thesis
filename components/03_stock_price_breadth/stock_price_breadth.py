@@ -25,7 +25,7 @@ def download_vmcsumnya(save_path):
     params = {
         'symbol': '!VMCSUMNYA',
         'start': '19800101',
-        'end': datetime.now().strftime('%Y%m%d'),
+        'end': '20260320',
         'windowid': 'main', 'chartid': 'main',
         'fromde': 'false', 'numCharts': '1', 'numWindows': '1',
         'appv': '1.91', 'z': 'true', 'extended': 'true',

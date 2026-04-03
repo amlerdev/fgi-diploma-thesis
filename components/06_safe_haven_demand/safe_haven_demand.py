@@ -2,13 +2,15 @@
 safe_haven_demand.py
 ====================
 Component #6: Safe Haven Demand
-Formula: ^GSPC 20-day return MINUS VFISX 20-day return
+Formula: ^IXIC 20-day return MINUS VFITX 20-day return
   CNN metodika: "Difference in 20-day stock and bond returns"
-  Stock = ^GSPC (S&P 500 price index, bez dividend — CNN metodika)
-  Bond  = VFISX (Vanguard Short-Term Treasury Fund, 1-3yr, od 1997)
+  Stock = ^IXIC (NASDAQ Composite)
+  Bond  = VFITX (Vanguard Intermediate-Term Treasury Fund, 5-10yr, od 1997)
 Normalization: Rolling Z-score, window=504d (~2 roky)
-Correlation with CNN FGI: r=0.672 (2011-2026, n=3826)
-Data sources: Yahoo Finance (^GSPC + VFISX) — FREE, od 1997
+Correlation with CNN FGI: r=0.730 (grid search, zscore top1)
+Data sources: Yahoo Finance (^IXIC + VFITX) — FREE, od 1997
+
+Změna 2026-04-03: ^GSPC+VFISX+zscore (r=0.672) → ^IXIC+VFITX+zscore (r=0.730)
 
 Validace raw signálu vs CNN referenčních hodnot:
   Nov 25, 2025: -2.45%  |  Dec 31, 2025: +0.50%  |  Jan 20, 2026: +0.29%
@@ -23,21 +25,21 @@ import numpy as np
 import yfinance as yf
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 504  # ~2 roky — nejlepší korelace r=0.672
+BEST_WINDOW = 504  # ~2 roky — nejlepší korelace r=0.730 (zscore)
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
-print("Stahuji ^GSPC (S&P 500 price index)...")
-spy_raw = yf.download('^GSPC', start='1997-01-01', end='2026-12-31', progress=False)['Close']
+print("Stahuji ^IXIC (NASDAQ Composite)...")
+spy_raw = yf.download('^IXIC', start='1997-01-01', end='2026-03-20', progress=False)['Close']
 spy_raw.index = pd.to_datetime(spy_raw.index)
 spy = spy_raw.iloc[:, 0] if isinstance(spy_raw, pd.DataFrame) else spy_raw
 
-print("Stahuji VFISX (Vanguard Short-Term Treasury, 1-3yr)...")
-vustx_raw = yf.download('VFISX', start='1997-01-01', end='2026-12-31', progress=False)['Close']
+print("Stahuji VFITX (Vanguard Intermediate-Term Treasury, 5-10yr)...")
+vustx_raw = yf.download('VFITX', start='1997-01-01', end='2026-03-20', progress=False)['Close']
 vustx_raw.index = pd.to_datetime(vustx_raw.index)
 vustx = vustx_raw.iloc[:, 0] if isinstance(vustx_raw, pd.DataFrame) else vustx_raw
 
-print(f"^GSPC: {spy.index[0].date()} → {spy.index[-1].date()}  ({len(spy)} dní)")
-print(f"VFISX: {vustx.index[0].date()} → {vustx.index[-1].date()}  ({len(vustx)} dní)")
+print(f"^IXIC: {spy.index[0].date()} → {spy.index[-1].date()}  ({len(spy)} dní)")
+print(f"VFITX: {vustx.index[0].date()} → {vustx.index[-1].date()}  ({len(vustx)} dní)")
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
 spy_ret   = spy.pct_change(periods=20) * 100

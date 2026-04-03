@@ -21,7 +21,7 @@ BEST_WINDOW = 63   # ~3 měsíce
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji S&P 500 (^GSPC) od 1995...")
-sp500_raw = yf.download('^GSPC', start='1995-01-01', end='2026-12-31', progress=False)['Close']
+sp500_raw = yf.download('^GSPC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
 sp500_raw.index = pd.to_datetime(sp500_raw.index)
 sp500 = sp500_raw.iloc[:, 0] if isinstance(sp500_raw, pd.DataFrame) else sp500_raw
 

@@ -44,7 +44,7 @@ print("Stahuji data...")
 stock_data = {}
 for ticker, name in STOCK_INDICES.items():
     try:
-        raw = yf.download(ticker, start='1997-01-01', end='2026-12-31', progress=False)['Close']
+        raw = yf.download(ticker, start='1997-01-01', end='2026-03-20', progress=False)['Close']
         raw.index = pd.to_datetime(raw.index)
         s = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
         s = s.dropna()
@@ -57,7 +57,7 @@ print()
 bond_data = {}
 for ticker, name in BOND_INSTRUMENTS.items():
     try:
-        raw = yf.download(ticker, start='1997-01-01', end='2026-12-31', progress=False)['Close']
+        raw = yf.download(ticker, start='1997-01-01', end='2026-03-20', progress=False)['Close']
         raw.index = pd.to_datetime(raw.index)
         b = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
         b = b.dropna()
@@ -157,7 +157,7 @@ if results:
     best = results[0]
     print(f"\n  --> NEJLEPŠÍ: {best['stock']} + {best['bond']}  r={best['r']:.3f}  w={best['w']}d  {best['method']}  (od {best['start']})")
 
-    print(f"\n  Top 5:")
-    for res in results[:5]:
+    print(f"\n  Top 10:")
+    for res in results[:10]:
         marker = "✓1998" if res['covers_1998'] else "     "
         print(f"    {res['stock']:<8} {res['bond']:<8} r={res['r']:.3f}  w={res['w']:4d}d  {res['method']:<12}  {marker}")

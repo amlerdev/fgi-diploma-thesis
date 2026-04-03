@@ -2,13 +2,14 @@
 stock_price_strength.py
 =======================
 Component #2: Stock Price Strength
-Formula: 20-day MA of (NYHGH-NYLOW)/(NYHGH+NYLOW) ratio
+Formula: 20-day MA of (NYHGH - NYLOW) net difference
   MA20 smoothing odstraní denní šum, zachová trend
 Normalization: Rolling Z-score, window=126d (~6 měsíců)
-Correlation with CNN FGI: r=0.696 (2011-2026, n=3826)
+Correlation with CNN FGI: r=0.760 (2011-2026, n=3826)
 Data source: StockCharts QuoteBrain API (FREE) — data v CSV, od 1980
 
 Grid search: viz stock_price_strength_grid.py
+Změna 2026-04-02: Net_MA20+zscore 126d (r=0.760) místo Ratio_MA20+zscore 126d (r=0.696)
 """
 
 from pathlib import Path
@@ -18,7 +19,7 @@ import numpy as np
 from datetime import datetime
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 126   # ~6 měsíců — nejlepší korelace r=0.696
+BEST_WINDOW = 126   # ~6 měsíců — nejlepší korelace r=0.760 (Net_MA20 + zscore)
 MA_WINDOW   = 20    # vyhlazení denního šumu
 
 # ── ČÁST 1: Download / načtení dat ───────────────────────────────────────────
@@ -27,7 +28,7 @@ def download_quotebrain(symbol, save_path):
     params = {
         'symbol': symbol,
         'start': '19800101',
-        'end': datetime.now().strftime('%Y%m%d'),
+        'end': '20260320',
         'windowid': 'main', 'chartid': 'main',
         'fromde': 'false', 'numCharts': '1', 'numWindows': '1',
         'appv': '1.91', 'z': 'true', 'extended': 'true',
@@ -70,9 +71,8 @@ df = pd.merge(
 
 df.index = df.index.normalize()
 
-ratio      = (df['NYHGH'] - df['NYLOW']) / (df['NYHGH'] + df['NYLOW']).replace(0, np.nan)
-raw_signal = ratio.rolling(MA_WINDOW).mean().dropna()
-raw_signal.name = 'SPS_Ratio_MA20'
+raw_signal = (df['NYHGH'] - df['NYLOW']).rolling(MA_WINDOW).mean().dropna()
+raw_signal.name = 'SPS_Net_MA20'
 
 print(f"Raw signal: {raw_signal.index[0].date()} → {raw_signal.index[-1].date()}  ({len(raw_signal)} dní)")
 
