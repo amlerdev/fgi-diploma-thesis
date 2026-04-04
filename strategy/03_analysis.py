@@ -5,10 +5,10 @@ Detailní analýza a vizualizace výsledků — unified grid search.
 
 Strategie vybrány podle nejlepšího OOS Total Return:
   - Buy & Hold (benchmark, S&P 500 Total Return)
-  - MR Long+MA  FG_Equal  entry=28, exit=92, fast=17, slow=95   (OOS 197%)
-  - MR Long     FG_OLS    entry=48, exit=79                      (OOS 222%)
-  - Mom Long    FG_Equal  entry=39, exit=32                      (OOS 167%, Sharpe 0.87)
-  - Mom Long    FG_OLS    entry=85, exit=7                       (OOS 120%, DD -18.8%)
+  - MR Long+MA  FGI_Equal  entry=28, exit=92, fast=17, slow=95   (OOS 197%)
+  - MR Long     FGI_OLS    entry=48, exit=79                      (OOS 222%)
+  - Mom Long    FGI_Equal  entry=39, exit=32                      (OOS 167%, Sharpe 0.87)
+  - Mom Long    FGI_OLS    entry=85, exit=7                       (OOS 120%, DD -18.8%)
 
 Primární hodnocení: OOS výsledky (2016–2026)
 
@@ -42,10 +42,10 @@ CRISES = {
 
 COLORS = {
     'Buy & Hold':        '#000000',
-    'MR+MA FG_Equal':   '#4CAF50',
-    'MR Long FG_OLS':   '#2196F3',
-    'Mom Long FG_Equal': '#FF9800',
-    'Mom Long FG_OLS':  '#E91E63',
+    'MR+MA FGI_Equal':   '#4CAF50',
+    'MR Long FGI_OLS':   '#2196F3',
+    'Mom Long FGI_Equal': '#FF9800',
+    'Mom Long FGI_OLS':  '#E91E63',
 }
 
 # ── Načtení dat ───────────────────────────────────────────────────────────────
@@ -58,13 +58,13 @@ df     = df.dropna(subset=['SP500_Close'])
 prices = df['SP500_Close'].values
 dates  = df.index
 
-fg_eq  = df['FG_Equal'].ffill().values
-fg_ols = df['FG_OLS'].ffill().values
+fgi_eq  = df['FGI_Equal'].ffill().values
+fgi_ols = df['FGI_OLS'].ffill().values
 
-# MA pro MR Long+MA FG_Equal (fast=17, slow=95)
-fg_eq_s = df['FG_Equal'].ffill()
-ma17    = fg_eq_s.rolling(17,  min_periods=17).mean().values
-ma95    = fg_eq_s.rolling(95,  min_periods=95).mean().values
+# MA pro MR Long+MA FGI_Equal (fast=17, slow=95)
+fgi_eq_s = df['FGI_Equal'].ffill()
+ma17    = fgi_eq_s.rolling(17,  min_periods=17).mean().values
+ma95    = fgi_eq_s.rolling(95,  min_periods=95).mean().values
 
 is_mask  = dates <= IS_END
 oos_mask = dates >= OOS_START
@@ -128,10 +128,10 @@ def metrics(equity, trades, base=None):
 # ── Výpočet equity křivek ─────────────────────────────────────────────────────
 strategies = {
     'Buy & Hold':        (INITIAL * prices / prices[0],                         0),
-    'MR+MA FG_Equal':   mr_long_ma(prices, fg_eq,  28, 92, ma17, ma95),
-    'MR Long FG_OLS':   mr_long(prices,    fg_ols, 48, 79),
-    'Mom Long FG_Equal': mom_long(prices,  fg_eq,  39, 32),
-    'Mom Long FG_OLS':  mom_long(prices,   fg_ols, 85,  7),
+    'MR+MA FGI_Equal':   mr_long_ma(prices, fgi_eq,  28, 92, ma17, ma95),
+    'MR Long FGI_OLS':   mr_long(prices,    fgi_ols, 48, 79),
+    'Mom Long FGI_Equal': mom_long(prices,  fgi_eq,  39, 32),
+    'Mom Long FGI_OLS':  mom_long(prices,   fgi_ols, 85,  7),
 }
 
 # ── Tisk souhrnné tabulky ─────────────────────────────────────────────────────
@@ -248,9 +248,9 @@ STRAT_LABELS = {
     'mom_long':   'Mom Long',   'mom_short':  'Mom Short',
     'mr_long_ma': 'MR Long+MA', 'mom_long_ma':'Mom Long+MA',
 }
-FG_LABELS = {'FG_Equal': 'Equal', 'FG_OLS': 'OLS'}
+FGI_LABELS = {'FGI_Equal': 'Equal', 'FGI_OLS': 'OLS'}
 
-col_labels = ['Strategie', 'FG', 'Entry', 'Exit', 'Fast', 'Slow', 'Trades',
+col_labels = ['Strategie', 'FGI', 'Entry', 'Exit', 'Fast', 'Slow', 'Trades',
               'IS Ret', 'IS Sharpe', 'IS MaxDD',
               'OOS Ret', 'OOS Sharpe', 'OOS MaxDD']
 
@@ -267,9 +267,9 @@ table_rows.append([
 row_colors.append(['#e8e8e8'] * 13)
 
 prev_strat = None
-for fg in ['FG_Equal', 'FG_OLS']:
+for fg in ['FGI_Equal', 'FGI_OLS']:
     for strat in STRAT_ORDER:
-        r = df_oos[(df_oos['strategy'] == strat) & (df_oos['fg_variant'] == fg)]
+        r = df_oos[(df_oos['strategy'] == strat) & (df_oos['fgi_variant'] == fg)]
         if r.empty:
             continue
         r = r.iloc[0]
@@ -290,7 +290,7 @@ for fg in ['FG_Equal', 'FG_OLS']:
         c_is = '#e8f5e9' if is_ret > bh_is_m['total_return'] else '#ffffff'
 
         table_rows.append([
-            STRAT_LABELS[strat], FG_LABELS[fg],
+            STRAT_LABELS[strat], FGI_LABELS[fg],
             int(r['entry']), int(r['exit']),
             fast if fast != '—' else '—',
             slow if slow != '—' else '—',

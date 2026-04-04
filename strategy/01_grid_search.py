@@ -8,8 +8,8 @@ Strategie:
   mr_short    — Mean Reversion Short       (entry < exit)
   mom_long    — Momentum Long              (entry > exit)
   mom_short   — Momentum Short             (entry > exit)
-  mr_long_ma  — MR Long + MA filtr na FG   (entry < exit, fast_ma < slow_ma)
-  mom_long_ma — Mom Long + MA filtr na FG  (entry > exit, fast_ma < slow_ma)
+  mr_long_ma  — MR Long + MA filtr na FGI  (entry < exit, fast_ma < slow_ma)
+  mom_long_ma — Mom Long + MA filtr na FGI (entry > exit, fast_ma < slow_ma)
 
 Parametry:
   2D (mr/mom):     entry, exit ∈ [1, 99], krok 1
@@ -18,10 +18,10 @@ Parametry:
     mom_long_ma:   entry ∈ range(50, 96, 2), exit ∈ range(5, 50, 2)
     fast_ma ∈ range(5, 35, 1), slow_ma ∈ range(20, 200, 5)
 
-MA filtr (vstup):  MA_fast[i] > MA_slow[i]  (uptrend na FG indexu)
+MA filtr (vstup):  MA_fast[i] > MA_slow[i]  (uptrend na FGI indexu)
 MA filtr (výstup): bez filtru — FG > exit je dostatečná podmínka
 
-FG varianty: FG_Equal, FG_OLS
+FG varianty: FGI_Equal, FGI_OLS
 Výstup: grid_results.csv
 
 Author: Petr Amler (AML0005)
@@ -43,7 +43,7 @@ IS_END   = '2015-12-31'
 
 INITIAL  = 10_000
 FEE      = 0.001   # 0.1% per trade (buy + sell = 0.2% round-trip)
-FG_COLS  = ['FG_Equal', 'FG_OLS']
+FGI_COLS  = ['FGI_Equal', 'FGI_OLS']
 
 # 2D rozsahy
 GRID_VALS = list(range(1, 100))
@@ -165,7 +165,7 @@ def mr_long_ma(prices, fg, entry, exit_, ma_fast, ma_slow):
     return equity, trades
 
 def mom_long_ma(prices, fg, entry, exit_, ma_fast, ma_slow):
-    """Mom Long s MA filtrem: vstup jen v uptrendu FG indexu."""
+    """Mom Long s MA filtrem: vstup jen v uptrendu FGI indexu."""
     equity = np.empty(len(prices))
     cash = float(INITIAL); shares = 0.0; trades = 0
     for i in range(len(prices) - 1):
@@ -187,12 +187,12 @@ STRATEGY_FNS_2D = {
 }
 
 # ── Tasky pro paralelní pool ───────────────────────────────────────────────────
-def run_2d(entry, exit_, strategy, fg_variant, prices, fg):
+def run_2d(entry, exit_, strategy, fgi_variant, prices, fg):
     equity, trades = STRATEGY_FNS_2D[strategy](prices, fg, entry, exit_)
     m = compute_metrics(equity, trades)
     return {
         'strategy':   strategy,
-        'fg_variant': fg_variant,
+        'fgi_variant': fgi_variant,
         'entry':      entry,
         'exit':       exit_,
         'fast_ma':    None,
@@ -200,7 +200,7 @@ def run_2d(entry, exit_, strategy, fg_variant, prices, fg):
         **m,
     }
 
-def run_ma(entry, exit_, fast, slow, strategy, fg_variant,
+def run_ma(entry, exit_, fast, slow, strategy, fgi_variant,
            prices, fg, ma_fast, ma_slow):
     if strategy == 'mr_long_ma':
         equity, trades = mr_long_ma(prices, fg, entry, exit_, ma_fast, ma_slow)
@@ -209,7 +209,7 @@ def run_ma(entry, exit_, fast, slow, strategy, fg_variant,
     m = compute_metrics(equity, trades)
     return {
         'strategy':   strategy,
-        'fg_variant': fg_variant,
+        'fgi_variant': fgi_variant,
         'entry':      entry,
         'exit':       exit_,
         'fast_ma':    fast,
@@ -220,13 +220,13 @@ def run_ma(entry, exit_, fast, slow, strategy, fg_variant,
 # ── Sestavení tasků ───────────────────────────────────────────────────────────
 all_tasks = []   # (type, args...)
 
-for fg_var in FG_COLS:
-    if fg_var not in df_is.columns:
-        print(f"   VAROVÁNÍ: {fg_var} chybí, přeskakuji.")
+for fgi_var in FGI_COLS:
+    if fgi_var not in df_is.columns:
+        print(f"   VAROVÁNÍ: {fgi_var} chybí, přeskakuji.")
         continue
 
-    fg_arr    = df_is[fg_var].ffill().values
-    fg_series = df_is[fg_var].ffill()
+    fg_arr    = df_is[fgi_var].ffill().values
+    fg_series = df_is[fgi_var].ffill()
 
     # -- 2D tasky --
     for strategy in STRATEGY_FNS_2D:
@@ -236,7 +236,7 @@ for fg_var in FG_COLS:
                     continue
                 if strategy in ('mom_long', 'mom_short') and entry <= exit_:
                     continue
-                all_tasks.append(('2d', entry, exit_, strategy, fg_var, prices, fg_arr))
+                all_tasks.append(('2d', entry, exit_, strategy, fgi_var, prices, fg_arr))
 
     # -- 4D MA tasky — předpočítej MA cache --
     ma_cache = {}
@@ -251,7 +251,7 @@ for fg_var in FG_COLS:
             # entry < exit garantováno rozsahy (max entry=49 < min exit=50)
             for fast, slow in valid_ma_pairs:
                 all_tasks.append(('ma', entry, exit_, fast, slow,
-                                  'mr_long_ma', fg_var, prices, fg_arr,
+                                  'mr_long_ma', fgi_var, prices, fg_arr,
                                   ma_cache[fast], ma_cache[slow]))
 
     # Mom Long + MA
@@ -260,7 +260,7 @@ for fg_var in FG_COLS:
             # entry > exit garantováno rozsahy (min entry=50 > max exit=49)
             for fast, slow in valid_ma_pairs:
                 all_tasks.append(('ma', entry, exit_, fast, slow,
-                                  'mom_long_ma', fg_var, prices, fg_arr,
+                                  'mom_long_ma', fgi_var, prices, fg_arr,
                                   ma_cache[fast], ma_cache[slow]))
 
 print(f"\nCelkem tasků: {len(all_tasks):,}")
@@ -270,11 +270,11 @@ print(f"  z toho MA:  {sum(1 for t in all_tasks if t[0] == 'ma'):,}")
 # ── Paralelní běh ─────────────────────────────────────────────────────────────
 def dispatch(task):
     if task[0] == '2d':
-        _, entry, exit_, strategy, fg_var, pr, fg = task
-        return run_2d(entry, exit_, strategy, fg_var, pr, fg)
+        _, entry, exit_, strategy, fgi_var, pr, fg = task
+        return run_2d(entry, exit_, strategy, fgi_var, pr, fg)
     else:
-        _, entry, exit_, fast, slow, strategy, fg_var, pr, fg, maf, mas = task
-        return run_ma(entry, exit_, fast, slow, strategy, fg_var, pr, fg, maf, mas)
+        _, entry, exit_, fast, slow, strategy, fgi_var, pr, fg, maf, mas = task
+        return run_ma(entry, exit_, fast, slow, strategy, fgi_var, pr, fg, maf, mas)
 
 print(f"\nSpouštím paralelní výpočet (n_jobs=-1)...")
 t0      = datetime.now()
@@ -292,17 +292,17 @@ print(f"Řádků celkem: {len(df_res):,}")
 
 # ── TOP výsledky ──────────────────────────────────────────────────────────────
 print("\n" + "=" * 70)
-print("TOP 1 per strategie × FG varianta (podle Total Return)")
+print("TOP 1 per strategie × FGI varianta (podle Total Return)")
 print("=" * 70)
 print(f"\nBuy & Hold (IS): Return={bh_return:.1f}%  CAGR={bh_cagr:.1f}%")
 
-for fg_var in FG_COLS:
+for fgi_var in FGI_COLS:
     print(f"\n{'─'*70}")
-    print(f"  {fg_var}")
+    print(f"  {fgi_var}")
     print(f"{'─'*70}")
     print(f"  {'Strategie':<15} {'entry':>5} {'exit':>5} {'fast':>5} {'slow':>5}"
           f"  {'Return':>9} {'CAGR':>7} {'Sharpe':>7} {'MaxDD':>8} {'Trades':>7}")
-    sub = df_res[df_res['fg_variant'] == fg_var]
+    sub = df_res[df_res['fgi_variant'] == fgi_var]
     for strat in ['mr_long', 'mr_short', 'mom_long', 'mom_short',
                   'mr_long_ma', 'mom_long_ma']:
         s = sub[sub['strategy'] == strat]

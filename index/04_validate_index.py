@@ -25,8 +25,8 @@ INDEX_DIR = Path(__file__).resolve().parent
 INPUT     = INDEX_DIR / 'fg_index_final.csv'
 
 VARIANTS = [
-    ('FG_Equal', '#2196F3', 'Equal (1/7)'),
-    ('FG_OLS',   '#FF9800', 'OLS'),
+    ('FGI_Equal', '#2196F3', 'Equal (1/7)'),
+    ('FGI_OLS',   '#FF9800', 'OLS'),
 ]
 
 COMP_COLS = ['Mom_Norm', 'Strength_Norm', 'Breadth_Norm',
@@ -117,13 +117,13 @@ def zone_biases(col):
     return biases
 
 # ── Vizualizace ───────────────────────────────────────────────────────────────
-ov_base = get_overlap('FG_Equal')
+ov_base = get_overlap('FGI_Equal')
 
 fig = plt.figure(figsize=(14, 18))
 fig.suptitle(
     "Validace rekonstrukce Fear & Greed Indexu (2011–2026)\n"
-    f"Equal r={results['FG_Equal']['r']:.3f}  |  "
-    f"OLS r={results['FG_OLS']['r']:.3f}",
+    f"Equal r={results['FGI_Equal']['r']:.3f}  |  "
+    f"OLS r={results['FGI_OLS']['r']:.3f}",
     fontsize=13, fontweight='bold', y=0.99
 )
 

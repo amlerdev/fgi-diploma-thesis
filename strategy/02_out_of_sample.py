@@ -3,7 +3,7 @@
 ==============
 Out-of-sample validace nejlepších parametrů z grid_results.csv.
 
-Selekce: top 1 per strategie × FG varianta (podle Total Return IS)
+Selekce: top 1 per strategie × FGI varianta (podle Total Return IS)
 Strategie: mr_long, mr_short, mom_long, mom_short, mr_long_ma, mom_long_ma
 
 IS:  1998-01-01 → 2015-12-31
@@ -158,7 +158,7 @@ STRATEGY_FNS = {
 # ── Pomocná funkce: spusť backtest na daném období ────────────────────────────
 def run_period(df_period, row):
     pr       = df_period['SP500_Close'].values
-    fgv      = row['fg_variant']
+    fgv      = row['fgi_variant']
     fg       = df_period[fgv].ffill().values
     e, x     = int(row['entry']), int(row['exit'])
     strategy = row['strategy']
@@ -176,7 +176,7 @@ def run_period(df_period, row):
 
     return compute_metrics(eq, tr)
 
-# ── Selekce top 1 per strategie × FG varianta ────────────────────────────────
+# ── Selekce top 1 per strategie × FGI varianta ────────────────────────────────
 print("\nNačítám grid_results.csv...")
 df_grid = pd.read_csv(GRID)
 print(f"   {len(df_grid):,} řádků celkem")
@@ -186,11 +186,11 @@ all_strategies = ['mr_long', 'mr_short', 'mom_long', 'mom_short',
 
 top = (df_grid[df_grid['strategy'].isin(all_strategies)]
        .sort_values('total_return', ascending=False)
-       .groupby(['fg_variant', 'strategy'])
+       .groupby(['fgi_variant', 'strategy'])
        .first()
        .reset_index())
 
-print(f"   Vybrané konfigurace: {len(top)} (top 1 per strategie × FG varianta)")
+print(f"   Vybrané konfigurace: {len(top)} (top 1 per strategie × FGI varianta)")
 
 # ── Výpočet IS + OOS ──────────────────────────────────────────────────────────
 print("\nPočítám IS a OOS výsledky...")
@@ -201,7 +201,7 @@ for _, row in top.iterrows():
     fast  = int(row['fast_ma']) if pd.notna(row['fast_ma']) else None
     slow  = int(row['slow_ma']) if pd.notna(row['slow_ma']) else None
     rows.append({
-        'fg_variant': row['fg_variant'],
+        'fgi_variant': row['fgi_variant'],
         'strategy':   row['strategy'],
         'entry':      int(row['entry']),
         'exit':       int(row['exit']),
@@ -243,10 +243,10 @@ print(f"  {'buy_and_hold':<18} {'—':>5} {'—':>5} {'—':>5} {'—':>5}  "
       f"{bh_is['total_return']:>7.1f}% {bh_is['sharpe']:>6.2f} {bh_is['max_dd']:>6.1f}%  "
       f"{bh_oos['total_return']:>7.1f}% {bh_oos['sharpe']:>6.2f} {bh_oos['max_dd']:>6.1f}%")
 
-for fg_var in ['FG_Equal', 'FG_OLS']:
-    sub = df_out[df_out['fg_variant'] == fg_var]
+for fgi_var in ['FGI_Equal', 'FGI_OLS']:
+    sub = df_out[df_out['fgi_variant'] == fgi_var]
     print(f"\n{'─'*75}")
-    print(f"  {fg_var}")
+    print(f"  {fgi_var}")
     print(f"{'─'*75}")
     print(header)
     print(sep)
