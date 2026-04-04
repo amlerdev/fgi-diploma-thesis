@@ -25,7 +25,7 @@ from pathlib import Path
 
 # ── Konfigurace ───────────────────────────────────────────────────────────────
 STRATEGY_DIR = Path(__file__).resolve().parent
-INPUT        = STRATEGY_DIR.parent / 'index' / 'fg_index_final.csv'
+INPUT        = STRATEGY_DIR.parent / 'index' / 'fgi_index_final.csv'
 
 IS_START  = '1998-01-01'
 IS_END    = '2015-12-31'

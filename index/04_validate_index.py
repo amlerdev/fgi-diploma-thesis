@@ -6,7 +6,7 @@ Validace dvou variant indexu proti CNN Fear & Greed (2011–2026).
 Metriky: Pearson r, R², MAE, RMSE, Bias, P90 absolutní chyby
 Výstup:  validation_chart.png (do code/index/)
 
-Vstup:  code/data/fg_index_final.csv
+Vstup:  code/data/fgi_index_final.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -22,7 +22,7 @@ import matplotlib.gridspec as gridspec
 from scipy.stats import pearsonr
 
 INDEX_DIR = Path(__file__).resolve().parent
-INPUT     = INDEX_DIR / 'fg_index_final.csv'
+INPUT     = INDEX_DIR / 'fgi_index_final.csv'
 
 VARIANTS = [
     ('FGI_Equal', '#2196F3', 'Equal (1/7)'),

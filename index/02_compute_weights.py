@@ -6,8 +6,8 @@ Krok 2/3: Výpočet vah pro dvě varianty indexu.
   Equal   — 1/7 pro každou komponentu (CNN metodika)
   OLS     — klasická OLS regrese (CNN FGI ~ 7 komponent), celý overlap 2011–2026
 
-Vstup:   code/data/fg_dataset.csv
-Výstup:  code/data/fg_weights.csv
+Vstup:   code/data/fgi_dataset.csv
+Výstup:  code/data/fgi_weights.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -18,8 +18,8 @@ import numpy as np
 import statsmodels.api as sm
 
 INDEX_DIR = Path(__file__).resolve().parent
-INPUT     = INDEX_DIR / 'fg_dataset.csv'
-OUTPUT    = INDEX_DIR / 'fg_weights.csv'
+INPUT     = INDEX_DIR / 'fgi_dataset.csv'
+OUTPUT    = INDEX_DIR / 'fgi_weights.csv'
 
 COMP_COLS = ['Mom_Norm', 'Strength_Norm', 'Breadth_Norm',
              'PutCall_Norm', 'VIX_Norm', 'SafeHaven_Norm', 'JunkBond_Norm']

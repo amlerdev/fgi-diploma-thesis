@@ -6,7 +6,7 @@ Krok 1/3: Merguje 7 normalizovaných komponent s S&P 500 a CNN daty.
 Vstupy:  code/components/*/  (*_normalized.csv)
          code/data/fear_greed_historical.csv
          Yahoo Finance (^SP500TR)
-Výstup:  code/data/fg_dataset.csv
+Výstup:  code/data/fgi_dataset.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -19,7 +19,7 @@ BASE      = Path(__file__).resolve().parent.parent
 COMP_DIR  = BASE / 'components'
 DATA_DIR  = BASE / 'data'
 INDEX_DIR = Path(__file__).resolve().parent
-OUTPUT    = INDEX_DIR / 'fg_dataset.csv'
+OUTPUT    = INDEX_DIR / 'fgi_dataset.csv'
 
 START_DATE = '1998-01-01'
 END_DATE   = '2026-12-31'

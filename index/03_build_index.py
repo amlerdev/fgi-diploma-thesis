@@ -6,9 +6,9 @@ Krok 3/3: Aplikuje váhy a sestaví finální index se dvěma variantami.
   FGI_Equal  — průměr 7 komponent (1/7 každá)
   FGI_OLS    — OLS koeficienty + intercept, ořezáno na [0, 100]
 
-Vstup:   code/data/fg_dataset.csv
-         code/data/fg_weights.csv
-Výstup:  code/data/fg_index_final.csv
+Vstup:   code/data/fgi_dataset.csv
+         code/data/fgi_weights.csv
+Výstup:  code/data/fgi_index_final.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -17,9 +17,9 @@ from pathlib import Path
 import pandas as pd
 
 INDEX_DIR = Path(__file__).resolve().parent
-INPUT_DS  = INDEX_DIR / 'fg_dataset.csv'
-INPUT_W   = INDEX_DIR / 'fg_weights.csv'
-OUTPUT    = INDEX_DIR / 'fg_index_final.csv'
+INPUT_DS  = INDEX_DIR / 'fgi_dataset.csv'
+INPUT_W   = INDEX_DIR / 'fgi_weights.csv'
+OUTPUT    = INDEX_DIR / 'fgi_index_final.csv'
 
 COMP_COLS = ['Mom_Norm', 'Strength_Norm', 'Breadth_Norm',
              'PutCall_Norm', 'VIX_Norm', 'SafeHaven_Norm', 'JunkBond_Norm']

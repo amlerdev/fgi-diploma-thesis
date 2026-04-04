@@ -20,7 +20,7 @@ from pathlib import Path
 
 # ── Konfigurace ───────────────────────────────────────────────────────────────
 STRATEGY_DIR = Path(__file__).resolve().parent
-INPUT        = STRATEGY_DIR.parent / 'index' / 'fg_index_final.csv'
+INPUT        = STRATEGY_DIR.parent / 'index' / 'fgi_index_final.csv'
 GRID         = STRATEGY_DIR / 'grid_results.csv'
 OUTPUT       = STRATEGY_DIR / 'oos_results.csv'
 

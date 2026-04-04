@@ -35,7 +35,7 @@ from joblib import Parallel, delayed
 
 # ── Konfigurace ───────────────────────────────────────────────────────────────
 STRATEGY_DIR = Path(__file__).resolve().parent
-INPUT        = STRATEGY_DIR.parent / 'index' / 'fg_index_final.csv'
+INPUT        = STRATEGY_DIR.parent / 'index' / 'fgi_index_final.csv'
 OUTPUT       = STRATEGY_DIR / 'grid_results.csv'
 
 IS_START = '1998-01-01'
