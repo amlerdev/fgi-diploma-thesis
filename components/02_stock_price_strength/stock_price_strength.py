@@ -75,7 +75,9 @@ df.index = df.index.normalize()
 # Forward-fill NaN (zavření burzy, např. Hurricane Sandy 2012-10-29/30)
 df = df.ffill()
 
-raw_signal = (df['NYHGH'] / df['NYLOW']).rolling(MA_WINDOW).mean().dropna()
+raw_signal = ((df['NYHGH'] - df['NYLOW']) /
+              (df['NYHGH'] + df['NYLOW']).replace(0, np.nan)
+             ).rolling(MA_WINDOW).mean().dropna()
 raw_signal.name = 'SPS_Ratio_MA5'
 
 print(f"Raw signal: {raw_signal.index[0].date()} → {raw_signal.index[-1].date()}  ({len(raw_signal)} dní)")
