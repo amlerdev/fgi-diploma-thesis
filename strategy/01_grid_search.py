@@ -286,8 +286,12 @@ print(f"Hotovo za {elapsed:.1f}s  ({len(results):,} výsledků)")
 
 # ── Uložení ───────────────────────────────────────────────────────────────────
 df_res = pd.DataFrame(results)
+before = len(df_res)
+df_res = df_res[df_res['trades'] >= 10]
+print(f"\nFiltr min. obchodů (≥10): {before:,} → {len(df_res):,} kombinací"
+      f" (vyřazeno {before - len(df_res):,})")
 df_res.to_csv(OUTPUT, index=False)
-print(f"\nUloženo: {OUTPUT}")
+print(f"Uloženo: {OUTPUT}")
 print(f"Řádků celkem: {len(df_res):,}")
 
 # ── TOP výsledky ──────────────────────────────────────────────────────────────

@@ -125,7 +125,7 @@ def metrics(equity, trades, base=None):
     return {'total_return': total_r, 'cagr': cagr, 'sharpe': sharpe,
             'max_dd': max_dd, 'trades': trades}
 
-# ── Výpočet equity křivek ─────────────────────────────────────────────────────
+# ── Výpočet equity křivek — celé období (pro full-period chart) ───────────────
 strategies = {
     'Buy & Hold':        (INITIAL * prices / prices[0],                         0),
     'MR+MA FGI_Equal':   mr_long_ma(prices, fgi_eq,  28, 92, ma17, ma95),
@@ -134,14 +134,33 @@ strategies = {
     'Mom Long FGI_OLS':  mom_long(prices,   fgi_ols, 85,  7),
 }
 
+# ── OOS fresh start — backtesty spuštěné znovu jen na OOS datech ──────────────
+# Konzistentní s 02_out_of_sample.py: cash = INITIAL, žádná přenesená pozice z IS.
+# MA pole jsou slicnutá z celkových (zahrnují IS warmup), ale trading startuje znovu.
+p_oos   = prices[oos_mask]
+eq_oos  = fgi_eq[oos_mask]
+ols_oos = fgi_ols[oos_mask]
+m17_oos = ma17[oos_mask]
+m95_oos = ma95[oos_mask]
+
+strategies_oos = {
+    'Buy & Hold':        (INITIAL * p_oos / p_oos[0],                          0),
+    'MR+MA FGI_Equal':   mr_long_ma(p_oos, eq_oos,  28, 92, m17_oos, m95_oos),
+    'MR Long FGI_OLS':   mr_long(p_oos,    ols_oos, 48, 79),
+    'Mom Long FGI_Equal': mom_long(p_oos,  eq_oos,  39, 32),
+    'Mom Long FGI_OLS':  mom_long(p_oos,   ols_oos, 85,  7),
+}
+
 # ── Tisk souhrnné tabulky ─────────────────────────────────────────────────────
 print(f"\n{'─'*70}")
 print(f"  {'Strategie':<22} {'IS Ret':>8} {'IS Shr':>7} {'IS DD':>7}  "
       f"{'OOS Ret':>8} {'OOS Shr':>7} {'OOS DD':>7}")
 print(f"{'─'*70}")
-for name, (eq, tr) in strategies.items():
-    m_is  = metrics(eq[is_mask],  0, base=eq[is_mask][0])
-    m_oos = metrics(eq[oos_mask], 0, base=eq[oos_mask][0])
+for name in strategies:
+    eq_full, _ = strategies[name]
+    eq_o,    _ = strategies_oos[name]
+    m_is  = metrics(eq_full[is_mask], 0, base=eq_full[is_mask][0])
+    m_oos = metrics(eq_o, 0)
     print(f"  {name:<22} "
           f"{m_is['total_return']:>7.1f}% {m_is['sharpe']:>7.2f} {m_is['max_dd']:>6.1f}%  "
           f"{m_oos['total_return']:>7.1f}% {m_oos['sharpe']:>7.2f} {m_oos['max_dd']:>6.1f}%")
@@ -154,10 +173,9 @@ fig.suptitle('Fear & Greed Index — Unified Grid Search\n'
 
 gs = gridspec.GridSpec(4, 2, figure=fig, hspace=0.50, wspace=0.35)
 
-# Panel 1: OOS equity křivky (plná šířka) — PRIMÁRNÍ
+# Panel 1: OOS equity křivky (plná šířka) — PRIMÁRNÍ (fresh start)
 ax1 = fig.add_subplot(gs[0, :])
-for name, (eq, _) in strategies.items():
-    eq_oos = eq[oos_mask]
+for name, (eq_oos, _) in strategies_oos.items():
     ax1.plot(dates[oos_mask], eq_oos / eq_oos[0] * 100,
              color=COLORS[name],
              linewidth=1.6 if name == 'Buy & Hold' else 1.1,
@@ -238,8 +256,8 @@ print(f"\nGraf uložen: {out}")
 # ── TABULKA VÝSLEDKŮ ──────────────────────────────────────────────────────────
 df_oos = pd.read_csv(STRATEGY_DIR / 'oos_results.csv')
 
-bh_is_m  = metrics(strategies['Buy & Hold'][0][is_mask],  0, base=strategies['Buy & Hold'][0][is_mask][0])
-bh_oos_m = metrics(strategies['Buy & Hold'][0][oos_mask], 0, base=strategies['Buy & Hold'][0][oos_mask][0])
+bh_is_m  = metrics(strategies['Buy & Hold'][0][is_mask], 0, base=strategies['Buy & Hold'][0][is_mask][0])
+bh_oos_m = metrics(strategies_oos['Buy & Hold'][0], 0)
 
 # Řádky tabulky
 STRAT_ORDER = ['mr_long', 'mr_short', 'mom_long', 'mom_short', 'mr_long_ma', 'mom_long_ma']
