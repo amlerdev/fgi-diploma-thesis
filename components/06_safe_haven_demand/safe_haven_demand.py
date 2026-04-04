@@ -29,12 +29,12 @@ BEST_WINDOW = 504  # ~2 roky — nejlepší korelace r=0.730 (zscore)
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji ^IXIC (NASDAQ Composite)...")
-spy_raw = yf.download('^IXIC', start='1997-01-01', end='2026-03-20', progress=False)['Close']
+spy_raw = yf.download('^IXIC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
 spy_raw.index = pd.to_datetime(spy_raw.index)
 spy = spy_raw.iloc[:, 0] if isinstance(spy_raw, pd.DataFrame) else spy_raw
 
 print("Stahuji VFITX (Vanguard Intermediate-Term Treasury, 5-10yr)...")
-vustx_raw = yf.download('VFITX', start='1997-01-01', end='2026-03-20', progress=False)['Close']
+vustx_raw = yf.download('VFITX', start='1995-01-01', end='2026-03-20', progress=False)['Close']
 vustx_raw.index = pd.to_datetime(vustx_raw.index)
 vustx = vustx_raw.iloc[:, 0] if isinstance(vustx_raw, pd.DataFrame) else vustx_raw
 
