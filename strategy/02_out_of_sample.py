@@ -156,15 +156,17 @@ STRATEGY_FNS = {
 }
 
 # ── Pomocná funkce: spusť backtest na daném období ────────────────────────────
+FGV_MAP = {'FG_Equal': 'FGI_Equal', 'FG_OLS': 'FGI_OLS'}
+
 def run_period(df_period, row):
     pr       = df_period['SP500_Close'].values
-    fgv      = row['fgi_variant']
+    fgv      = FGV_MAP.get(row['fg_variant'], row['fg_variant'])
     fg       = df_period[fgv].ffill().values
     e, x     = int(row['entry']), int(row['exit'])
     strategy = row['strategy']
 
     if strategy in MA_STRATEGIES:
-        fg_series = df_period[fgv].ffill()
+        fg_series = df_period[FGV_MAP.get(fgv, fgv)].ffill()
         maf = fg_series.rolling(int(row['fast_ma']), min_periods=int(row['fast_ma'])).mean().values
         mas = fg_series.rolling(int(row['slow_ma']), min_periods=int(row['slow_ma'])).mean().values
         if strategy == 'mr_long_ma':
@@ -186,7 +188,7 @@ all_strategies = ['mr_long', 'mr_short', 'mom_long', 'mom_short',
 
 top = (df_grid[df_grid['strategy'].isin(all_strategies)]
        .sort_values('total_return', ascending=False)
-       .groupby(['fgi_variant', 'strategy'])
+       .groupby(['fg_variant', 'strategy'])
        .first()
        .reset_index())
 
@@ -201,7 +203,7 @@ for _, row in top.iterrows():
     fast  = int(row['fast_ma']) if pd.notna(row['fast_ma']) else None
     slow  = int(row['slow_ma']) if pd.notna(row['slow_ma']) else None
     rows.append({
-        'fgi_variant': row['fgi_variant'],
+        'fg_variant': row['fg_variant'],
         'strategy':   row['strategy'],
         'entry':      int(row['entry']),
         'exit':       int(row['exit']),
@@ -243,8 +245,8 @@ print(f"  {'buy_and_hold':<18} {'—':>5} {'—':>5} {'—':>5} {'—':>5}  "
       f"{bh_is['total_return']:>7.1f}% {bh_is['sharpe']:>6.2f} {bh_is['max_dd']:>6.1f}%  "
       f"{bh_oos['total_return']:>7.1f}% {bh_oos['sharpe']:>6.2f} {bh_oos['max_dd']:>6.1f}%")
 
-for fgi_var in ['FGI_Equal', 'FGI_OLS']:
-    sub = df_out[df_out['fgi_variant'] == fgi_var]
+for fgi_var in df_out['fg_variant'].unique():
+    sub = df_out[df_out['fg_variant'] == fgi_var]
     print(f"\n{'─'*75}")
     print(f"  {fgi_var}")
     print(f"{'─'*75}")
