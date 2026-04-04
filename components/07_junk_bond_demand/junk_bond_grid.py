@@ -6,7 +6,7 @@ CNN říká: "Yield spread: junk bonds vs. investment grade"
 Raw signal = junk_yield - ig_yield
 Menší spread = greed, větší spread = fear → inverse normalizace
 
-Celkem: 14 raw signálů × 3 metody × 12 oken = 504 kombinací
+Celkem: 13 raw signálů × 3 metody × 12 oken = 468 kombinací
 Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 """
 
