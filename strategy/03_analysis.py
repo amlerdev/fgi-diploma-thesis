@@ -248,7 +248,7 @@ STRAT_LABELS = {
     'mom_long':   'Mom Long',   'mom_short':  'Mom Short',
     'mr_long_ma': 'MR Long+MA', 'mom_long_ma':'Mom Long+MA',
 }
-FGI_LABELS = {'FGI_Equal': 'Equal', 'FGI_OLS': 'OLS'}
+FGI_LABELS = {'FGI_Equal': 'Equal', 'FGI_OLS': 'OLS', 'FG_Equal': 'Equal', 'FG_OLS': 'OLS'}
 
 col_labels = ['Strategie', 'FGI', 'Entry', 'Exit', 'Fast', 'Slow', 'Trades',
               'IS Ret', 'IS Sharpe', 'IS MaxDD',
@@ -267,9 +267,9 @@ table_rows.append([
 row_colors.append(['#e8e8e8'] * 13)
 
 prev_strat = None
-for fg in ['FGI_Equal', 'FGI_OLS']:
+for fg in df_oos['fg_variant'].unique():
     for strat in STRAT_ORDER:
-        r = df_oos[(df_oos['strategy'] == strat) & (df_oos['fgi_variant'] == fg)]
+        r = df_oos[(df_oos['strategy'] == strat) & (df_oos['fg_variant'] == fg)]
         if r.empty:
             continue
         r = r.iloc[0]
