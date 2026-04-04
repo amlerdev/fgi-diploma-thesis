@@ -186,7 +186,29 @@ print(f"   {len(df_grid):,} řádků celkem")
 all_strategies = ['mr_long', 'mr_short', 'mom_long', 'mom_short',
                   'mr_long_ma', 'mom_long_ma']
 
-top = (df_grid[df_grid['strategy'].isin(all_strategies)]
+# Dynamický filtr: entry/exit musí být v dosažitelném rozsahu IS dat (±2 tolerance)
+TOL = 2
+fgi_valid = {}
+for raw_name, idx_name in FGV_MAP.items():
+    if idx_name in df_is.columns:
+        s  = df_is[idx_name].ffill().dropna()
+        lo = max(1,  int(s.min()) - TOL)
+        hi = min(99, int(s.max()) + TOL)
+        fgi_valid[raw_name] = (lo, hi)
+        print(f"   {raw_name}: grid [{lo}, {hi}]")
+
+def in_range(row):
+    fgv = row['fg_variant']
+    if fgv not in fgi_valid:
+        return True
+    lo, hi = fgi_valid[fgv]
+    return lo <= row['entry'] <= hi and lo <= row['exit'] <= hi
+
+mask_range = df_grid.apply(in_range, axis=1)
+df_grid_f  = df_grid[mask_range]
+print(f"   Po filtraci rozsahu: {len(df_grid_f):,} řádků")
+
+top = (df_grid_f[df_grid_f['strategy'].isin(all_strategies)]
        .sort_values('total_return', ascending=False)
        .groupby(['fg_variant', 'strategy'])
        .first()

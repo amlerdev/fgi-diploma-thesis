@@ -34,7 +34,8 @@ w  = pd.read_csv(INPUT_W,  index_col='method')
 
 print(f"\nDataset: {df.shape[0]} řádků  ({df.index[0].date()} → {df.index[-1].date()})")
 
-X = df[COMP_COLS]
+# ffill: ojedinělé NaN u PutCall/JunkBond nevytvoří díry v indexu
+X = df[COMP_COLS].ffill()
 
 # ── FGI_Equal ──────────────────────────────────────────────────────────────────
 equal_weights = w.loc['Equal', COMP_COLS].values

@@ -74,6 +74,18 @@ n_days    = len(prices)
 bh_cagr   = ((prices[-1] / prices[0]) ** (252 / n_days) - 1) * 100
 print(f"\nBuy & Hold (IS): Return={bh_return:.1f}%  CAGR={bh_cagr:.1f}%")
 
+# ── Dynamické rozsahy podle skutečného min/max každé FGI varianty ─────────────
+TOL = 2   # tolerance ±2 body
+FGI_RANGES = {}
+for col in FGI_COLS:
+    if col not in df_is.columns:
+        continue
+    s = df_is[col].ffill().dropna()
+    lo = max(1,   int(s.min()) - TOL)
+    hi = min(99,  int(s.max()) + TOL)
+    FGI_RANGES[col] = (lo, hi)
+    print(f"  {col}: IS min={s.min():.1f}  max={s.max():.1f}  → grid [{lo}, {hi}]")
+
 # ── Metriky ───────────────────────────────────────────────────────────────────
 def compute_metrics(equity: np.ndarray, trades: int) -> dict:
     n        = len(equity)
@@ -228,10 +240,13 @@ for fgi_var in FGI_COLS:
     fg_arr    = df_is[fgi_var].ffill().values
     fg_series = df_is[fgi_var].ffill()
 
+    lo, hi = FGI_RANGES[fgi_var]
+    grid   = list(range(lo, hi + 1))
+
     # -- 2D tasky --
     for strategy in STRATEGY_FNS_2D:
-        for entry in GRID_VALS:
-            for exit_ in GRID_VALS:
+        for entry in grid:
+            for exit_ in grid:
                 if strategy in ('mr_long', 'mr_short') and entry >= exit_:
                     continue
                 if strategy in ('mom_long', 'mom_short') and entry <= exit_:
@@ -245,19 +260,23 @@ for fgi_var in FGI_COLS:
 
     valid_ma_pairs = [(f, s) for f in FAST_RANGE for s in SLOW_RANGE if f < s]
 
+    mid      = (lo + hi) // 2
+    entry_mr  = [v for v in range(lo, mid, 2)]
+    exit_mr   = [v for v in range(mid, hi + 1, 2)]
+    entry_mom = exit_mr
+    exit_mom  = entry_mr
+
     # MR Long + MA
-    for entry in ENTRY_MR:
-        for exit_ in EXIT_MR:
-            # entry < exit garantováno rozsahy (max entry=49 < min exit=50)
+    for entry in entry_mr:
+        for exit_ in exit_mr:
             for fast, slow in valid_ma_pairs:
                 all_tasks.append(('ma', entry, exit_, fast, slow,
                                   'mr_long_ma', fgi_var, prices, fg_arr,
                                   ma_cache[fast], ma_cache[slow]))
 
     # Mom Long + MA
-    for entry in ENTRY_MOM:
-        for exit_ in EXIT_MOM:
-            # entry > exit garantováno rozsahy (min entry=50 > max exit=49)
+    for entry in entry_mom:
+        for exit_ in exit_mom:
             for fast, slow in valid_ma_pairs:
                 all_tasks.append(('ma', entry, exit_, fast, slow,
                                   'mom_long_ma', fgi_var, prices, fg_arr,
