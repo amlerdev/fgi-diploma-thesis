@@ -109,19 +109,20 @@ NORM_METHODS = {
 }
 
 # ── Grid search ───────────────────────────────────────────────────────────────
-print(f"\n── Grid search (best MA+method+window per indikátor) ───────────────────")
-print(f"  {'Indikátor':<8} {'MA':>4}  {'r':>7}  {'w':>6}  {'Metoda':<12}  {'Od':>12}")
-print(f"  {'-'*60}")
+print(f"\n── Grid search — všechny kombinace ────────────────────────────────────")
+print(f"  {'Indikátor':<8} {'MA':>4}  {'Metoda':<12}  {'Okno':>6}  {'r':>7}  {'n':>6}")
+print(f"  {'-'*55}")
 
 results = []
+all_combinations = []
 
 for symbol, series in raw_data.items():
     best_r, best_ma, best_w, best_method = 0, None, None, None
-    overlap = series.index.intersection(cnn.index)
 
     for ma in MA_WINDOWS:
         raw = series.rolling(ma).mean().dropna() if ma > 1 else series.copy()
         raw_overlap = raw.index.intersection(cnn.index)
+        ma_str = f"{ma}d" if ma > 1 else "raw"
 
         for method_name, norm_fn in NORM_METHODS.items():
             for w in WINDOWS:
@@ -131,6 +132,12 @@ for symbol, series in raw_data.items():
                     if len(valid) < 200:
                         continue
                     r, _ = pearsonr(norm.loc[valid], cnn.loc[valid])
+                    marker = " *" if r > best_r else "  "
+                    print(f"  {symbol:<8} {ma_str:>4}  {method_name:<12}  {w:>5}d  {r:>7.3f}  {len(valid):>6}{marker}")
+                    all_combinations.append({
+                        'symbol': symbol, 'ma': ma, 'method': method_name,
+                        'w': w, 'r': r, 'n': len(valid),
+                    })
                     if r > best_r:
                         best_r, best_ma, best_w, best_method = r, ma, w, method_name
                 except Exception:
@@ -138,13 +145,19 @@ for symbol, series in raw_data.items():
 
     if best_r > 0:
         covers = series.index[0].year <= 1998
-        marker = " ✓1998" if covers else "      "
         ma_str = f"{best_ma}d" if best_ma > 1 else "raw"
         results.append({
             'symbol': symbol, 'r': best_r, 'ma': best_ma, 'w': best_w,
             'method': best_method, 'start': series.index[0].date(), 'covers': covers
         })
-        print(f"  {symbol:<8} {ma_str:>4}  {best_r:>7.3f}  {best_w:>5}d  {best_method:<12}  {str(series.index[0].date()):>12}{marker}")
+
+print(f"\n── Souhrn nejlepších kombinací ─────────────────────────────────────────")
+print(f"  {'Indikátor':<8} {'MA':>4}  {'r':>7}  {'w':>6}  {'Metoda':<12}  {'Od':>12}")
+print(f"  {'-'*60}")
+for res in results:
+    ma_str = f"{res['ma']}d" if res['ma'] > 1 else "raw"
+    marker = " ✓1998" if res['covers'] else "      "
+    print(f"  {res['symbol']:<8} {ma_str:>4}  {res['r']:>7.3f}  {res['w']:>5}d  {res['method']:<12}  {str(res['start']):>12}{marker}")
 
 # ── Výsledek ──────────────────────────────────────────────────────────────────
 results.sort(key=lambda x: x['r'], reverse=True)
