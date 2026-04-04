@@ -2,8 +2,8 @@
 stock_price_strength.py
 =======================
 Component #2: Stock Price Strength
-Formula: 5-day MA of (NYHGH / NYLOW) ratio
-  MA5 smoothing odstraní denní šum, zachová trend
+Formula: 5-day MA of (NYHGH - NYLOW) / (NYHGH + NYLOW)
+MA5 smoothing odstraní denní šum, zachová trend
 Normalization: Rolling Z-score, window=504d (~2 roky)
 Correlation with CNN FGI: r=0.758 (grid search top zscore)
 Data source: StockCharts QuoteBrain API (FREE) — data v CSV, od 1980

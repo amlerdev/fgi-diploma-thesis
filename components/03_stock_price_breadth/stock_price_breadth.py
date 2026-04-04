@@ -16,7 +16,7 @@ import pandas as pd
 from datetime import datetime
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 126  # ~6 měsíců — nejlepší korelace r=0.816
+BEST_WINDOW = 126  # ~6 měsíců
 
 # ── ČÁST 1: Download / načtení dat ───────────────────────────────────────────
 def download_vmcsumnya(save_path):
