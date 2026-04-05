@@ -29,24 +29,24 @@ BEST_WINDOW = 504  # ~2 roky — nejlepší korelace r=0.730 (zscore)
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji ^IXIC (NASDAQ Composite)...")
-spy_raw = yf.download('^IXIC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
-spy_raw.index = pd.to_datetime(spy_raw.index)
-spy = spy_raw.iloc[:, 0] if isinstance(spy_raw, pd.DataFrame) else spy_raw
+ixic_raw = yf.download('^IXIC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
+ixic_raw.index = pd.to_datetime(ixic_raw.index)
+ixic = ixic_raw.iloc[:, 0] if isinstance(ixic_raw, pd.DataFrame) else ixic_raw
 
 print("Stahuji VFITX (Vanguard Intermediate-Term Treasury, 5-10yr)...")
 vustx_raw = yf.download('VFITX', start='1995-01-01', end='2026-03-20', progress=False)['Close']
 vustx_raw.index = pd.to_datetime(vustx_raw.index)
 vustx = vustx_raw.iloc[:, 0] if isinstance(vustx_raw, pd.DataFrame) else vustx_raw
 
-print(f"^IXIC: {spy.index[0].date()} → {spy.index[-1].date()}  ({len(spy)} dní)")
+print(f"^IXIC: {ixic.index[0].date()} → {ixic.index[-1].date()}  ({len(ixic)} dní)")
 print(f"VFITX: {vustx.index[0].date()} → {vustx.index[-1].date()}  ({len(vustx)} dní)")
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
-spy_ret   = spy.pct_change(periods=20) * 100
+ixic_ret  = ixic.pct_change(periods=20) * 100
 vustx_ret = vustx.pct_change(periods=20) * 100
 
-common     = spy_ret.index.intersection(vustx_ret.index)
-raw_signal = (spy_ret.loc[common] - vustx_ret.loc[common]).dropna()
+common     = ixic_ret.index.intersection(vustx_ret.index)
+raw_signal = (ixic_ret.loc[common] - vustx_ret.loc[common]).dropna()
 raw_signal.name = 'SafeHaven_Raw'
 
 print(f"\nRaw signal: {raw_signal.index[0].date()} → {raw_signal.index[-1].date()}")
