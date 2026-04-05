@@ -4,7 +4,7 @@ market_volatility_vix.py
 Component #5: Market Volatility (VIX)
 Indicator: VIX / MA50 ratio, INVERSE normalization
 Normalization: Rolling Z-score (inverse), window=1512d (~6 years)
-Correlation with CNN FGI: r=0.644 (2011-2026, n=3826)
+Correlation with CNN FGI: r=0.653 (2011-2026, n=3826)
 Data source: Yahoo Finance (^VIX) — FREE
 
 Grid search: viz market_volatility_vix_grid.py
@@ -15,7 +15,7 @@ import pandas as pd
 import yfinance as yf
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 1512  # ~6 let — nejlepší korelace r=0.644; VIX spiky potřebují dlouhý kontext
+BEST_WINDOW = 1512  # ~6 let — nejlepší korelace r=0.653; VIX spiky potřebují dlouhý kontext
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji VIX (^VIX) z Yahoo Finance...")
