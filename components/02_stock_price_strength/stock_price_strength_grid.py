@@ -20,12 +20,10 @@ nyhgh = pd.read_csv(_dir / 'nyhgh_1980_2026.csv', parse_dates=['Date'], index_co
 nylow = pd.read_csv(_dir / 'nylow_1980_2026.csv', parse_dates=['Date'], index_col='Date')['Close']
 nyhgh.index = nyhgh.index.normalize()
 nylow.index = nylow.index.normalize()
-nyhgh = nyhgh.dropna()
-nylow = nylow.dropna()
 
 common = nyhgh.index.intersection(nylow.index)
-nyhgh = nyhgh.loc[common]
-nylow = nylow.loc[common]
+nyhgh = nyhgh.loc[common].ffill()
+nylow = nylow.loc[common].ffill()
 
 print(f"Data: {common[0].date()} → {common[-1].date()}  ({len(common)} dní)")
 
