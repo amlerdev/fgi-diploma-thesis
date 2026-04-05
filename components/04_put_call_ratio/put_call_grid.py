@@ -56,7 +56,7 @@ def download_quotebrain(symbol, save_path):
 
 # ── Načtení / download indikátoru ─────────────────────────────────────────────
 INDICATORS = {
-    '$CPC': 'put_call_cpc_1995_2026.csv',
+    '$CPC': 'put_call_ratio_1995_2026.csv',  # stejný soubor jako produkce
 }
 
 raw_data = {}
@@ -67,11 +67,13 @@ for symbol, fname in INDICATORS.items():
         if csv_path.exists():
             df = pd.read_csv(csv_path, parse_dates=['Date'])
             df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
-            s = df.set_index('Date')['Close'].dropna()
+            col = 'CPC' if 'CPC' in df.columns else 'Close'
+            s = df.set_index('Date')[col].dropna()
         else:
             print(f"  Stahuji {symbol}...")
             df = download_quotebrain(symbol, csv_path)
-            s = df.set_index('Date')['Close'].dropna()
+            col = 'CPC' if 'CPC' in df.columns else 'Close'
+            s = df.set_index('Date')[col].dropna()
         raw_data[symbol] = s
         print(f"  ✓ {symbol:<8} {s.index[0].date()} → {s.index[-1].date()}  ({len(s)} dní)")
     except Exception as e:

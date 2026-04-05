@@ -4,7 +4,7 @@ put_call_ratio.py
 Component #4: Put/Call Ratio
 Indicator: CBOE Total Put/Call Ratio ($CPC), 5-day MA, INVERSE normalization
 Normalization: Rolling Z-score (inverse), window=252d (~1 year)
-Correlation with CNN FGI: r=0.641 (2011-2026, n=3826)
+Correlation with CNN FGI: r=0.643 (2011-2026, n=3826)
 Data source: StockCharts QuoteBrain API (FREE) — data v CSV
 
 Grid search: viz put_call_grid.py
@@ -16,7 +16,7 @@ import pandas as pd
 from datetime import datetime
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 252  # ~1 rok — nejlepší korelace r=0.641
+BEST_WINDOW = 252  # ~1 rok — nejlepší korelace r=0.643
 
 # ── ČÁST 1: Download / načtení dat ───────────────────────────────────────────
 def download_quotebrain(symbol, save_path):
