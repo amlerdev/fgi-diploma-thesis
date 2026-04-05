@@ -39,7 +39,7 @@ X = df[COMP_COLS].ffill()
 
 # ── FGI_Equal ──────────────────────────────────────────────────────────────────
 equal_weights = w.loc['Equal', COMP_COLS].values
-df['FGI_Equal'] = X.dot(equal_weights)
+df['FGI_Equal'] = X.dot(equal_weights).clip(0, 100)
 
 # ── FGI_OLS ────────────────────────────────────────────────────────────────────
 ols_weights   = w.loc['OLS', COMP_COLS].values
