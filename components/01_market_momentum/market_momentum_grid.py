@@ -114,7 +114,6 @@ for sig_name, sig_fn in SIGNAL_TYPES.items():
 
 # ── ČÁST 4: Výsledek ─────────────────────────────────────────────────────────
 results.sort(key=lambda x: x['r'], reverse=True)
-results.sort(key=lambda x: x['r'], reverse=True)
 print(f"\n{'─'*52}")
 print(f"  Produkční verze (diff, MA125, Z-score w=63d):  r=0.832")
 print(f"\n  Top 5 kombinací:")
