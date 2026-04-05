@@ -68,8 +68,14 @@ for col in ['FGI_Equal', 'FGI_OLS']:
           f"{sub.min():>8.1f} {sub.max():>8.1f}")
 
 # ── Uložení ───────────────────────────────────────────────────────────────────
+# Ukládáme ffill'd hodnoty komponent (X), aby FGI_Equal bylo reprodukovatelné
+# přímo z CSV jako průměr 7 sloupců.
 out_cols = ['SP500_Close'] + COMP_COLS + ['FGI_Equal', 'FGI_OLS', 'CNN_FearGreed']
-df[out_cols].to_csv(OUTPUT)
+df_out = df[['SP500_Close', 'CNN_FearGreed']].copy()
+df_out[COMP_COLS] = X
+df_out['FGI_Equal'] = df['FGI_Equal']
+df_out['FGI_OLS']   = df['FGI_OLS']
+df_out[out_cols].to_csv(OUTPUT)
 
 print(f"\nUloženo: {OUTPUT}")
 print(f"Sloupce: {out_cols}")
