@@ -5,7 +5,7 @@ Component #7: Junk Bond Demand
 Indicator: ICE BofA US High Yield OAS (BAMLH0A0HYM2), INVERSE normalization
   Wider spread = more fear, tighter spread = more greed
 Normalization: Rolling Z-score (inverse), window=63d (~3 měsíce)
-Correlation with CNN FGI: r=0.769 (grid search 2026-04-03)
+Correlation with CNN FGI: r=0.768 (grid search 2026-04-03)
 Data source: FRED (BAMLH0A0HYM2) — FREE, od 1996
 
 Grid search: viz junk_bond_grid.py
@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 63  # ~3 měsíce — nejlepší korelace r=0.769
+BEST_WINDOW = 63  # ~3 měsíce — nejlepší korelace r=0.768
 
 # ── ČÁST 1: Download / načtení dat ───────────────────────────────────────────
 hy_csv = _dir / 'hy_oas_data.csv'

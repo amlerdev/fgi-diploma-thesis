@@ -38,7 +38,6 @@ ETF_TICKERS = {
     'LQD'   : 'iShares IG Corporate (2002+)',
     'VWESX' : 'Vanguard LT Investment Grade (1973+)',
     'VBMFX' : 'Vanguard Total Bond Market (1986+)',
-    'VCSH'  : 'Vanguard Short-Term Corp Bond (2009+)',
 }
 
 etf_data = {}
