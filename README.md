@@ -42,7 +42,7 @@ code/
 │   ├── 01_grid_search.py            # Grid search IS (2.36M kombinací, paralelní)
 │   ├── 02_out_of_sample.py          # OOS validace (2016–2026)
 │   ├── 03_analysis.py               # Grafy + tabulka výsledků
-│   ├── grid_results.csv             # Výsledky grid searche
+│   ├── grid_results.csv             # Výsledky grid searche (17 975 platných kombinací)
 │   ├── oos_results.csv              # IS/OOS výsledky top strategií
 │   ├── full_period.png              # Equity křivky 1998–2026 (IS+OOS)
 │   ├── oos_equity.png               # Equity křivky OOS 2016–2026
