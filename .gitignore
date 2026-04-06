@@ -1,5 +1,5 @@
 # Velké datové soubory (přes 100MB limit GitHubu)
-strategy/grid_results.csv
+_archive/strategy_v1/grid_results.csv
 
 # Python
 __pycache__/

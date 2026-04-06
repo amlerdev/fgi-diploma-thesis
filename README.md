@@ -36,14 +36,19 @@ code/
 │   ├── fg_weights.csv               # Equal + OLS váhy
 │   └── fg_index_final.csv           # Finální index (1998–2026)
 │
-├── strategy/                        # Backtesting obchodních strategií
-│   ├── 01_grid_search.py            # Unified grid search (2.36M kombinací)
+├── strategy/                        # Backtesting obchodních strategií (v2)
+│   ├── backtester.py                # Engine: 5 strategií + compute_metrics
+│   ├── config.py                    # Sdílené konstanty (rozsahy, periody, poplatky)
+│   ├── 01_grid_search.py            # Grid search IS (2.36M kombinací, paralelní)
 │   ├── 02_out_of_sample.py          # OOS validace (2016–2026)
 │   ├── 03_analysis.py               # Grafy + tabulka výsledků
 │   ├── grid_results.csv             # Výsledky grid searche
-│   ├── oos_results.csv              # IS/OOS výsledky
-│   ├── analysis_chart.png           # Equity křivky, drawdown, krize
+│   ├── oos_results.csv              # IS/OOS výsledky top strategií
+│   ├── full_period.png              # Equity křivky 1998–2026 (IS+OOS)
+│   ├── oos_equity.png               # Equity křivky OOS 2016–2026
 │   └── results_table.png            # Přehledová tabulka strategií
+│
+├── _archive/strategy_v1/            # Stará verze backtesteru (pro referenci)
 │
 ├── ZDROJE.md                        # Literatura a citace
 └── README.md                        # Tento soubor
@@ -65,7 +70,7 @@ python index/04_validate_index.py     # → validation_chart.png
 ```bash
 python strategy/01_grid_search.py     # → grid_results.csv  (~25 min)
 python strategy/02_out_of_sample.py   # → oos_results.csv
-python strategy/03_analysis.py        # → analysis_chart.png, results_table.png
+python strategy/03_analysis.py        # → full_period.png, oos_equity.png, results_table.png
 ```
 
 ---
@@ -75,17 +80,34 @@ python strategy/03_analysis.py        # → analysis_chart.png, results_table.pn
 ### Index (validace vs CNN, overlap 2011–2026)
 | Varianta | Pearson r | R² | MAE |
 |----------|-----------|----|-----|
-| FG_Equal (1/7 každá komponenta) | 0.927 | 0.859 | ~6.5 |
-| FG_OLS (regresní váhy) | 0.936 | 0.876 | ~6.0 |
+| FG_Equal (1/7 každá komponenta) | 0.933 | 0.870 | 6.52 |
+| FG_OLS (regresní váhy)          | 0.939 | 0.882 | 5.85 |
 
-### Strategie — OOS 2016–2026 (S&P 500 Total Return, poplatky 0.1%)
-| Strategie | OOS Return | OOS Sharpe | OOS MaxDD |
-|-----------|-----------|-----------|----------|
-| Buy & Hold (benchmark) | 277% | 0.81 | -33.8% |
-| MR Long+MA FG_Equal | 229% | 0.75 | -33.8% |
-| MR Long FG_OLS | 213% | 0.74 | -33.8% |
-| Mom Long FG_Equal | 147% | 0.80 | -31.2% |
-| Mom Long FG_OLS | 119% | 0.82 | -18.8% |
+### Strategie — OOS 2016–2026 (S&P 500 Total Return, poplatky 0.1 %)
+| Strategie | Parametry | OOS Return | OOS CAGR | OOS Sharpe | OOS MaxDD |
+|-----------|-----------|-----------|----------|-----------|----------|
+| Buy & Hold (benchmark) | — | 277 % | 13.6 % | 0.81 | −33.8 % |
+| kontrarian_long  FGI_OLS   | entry=38, exit=79 | **267 %** | 13.6 % | **0.84** | −30.5 % |
+| kontrarian_combined FGI_OLS | entry=38, exit=79 | 245 % | 12.9 % | 0.75 | −30.5 % |
+| trend_long FGI_Equal        | entry=58, exit=8  | 225 % | 12.3 % | **0.91** | −27.1 % |
+| trend_long FGI_OLS          | entry=54, exit=11 | 217 % | 12.0 % | 0.90 | −27.3 % |
+| kontrarian_long FGI_Equal   | entry=40, exit=82 | 180 % | 10.6 % | 0.69 | −33.8 % |
+
+---
+
+## Backtestovací engine (strategy/backtester.py)
+
+Pět strategií, každá jako samostatná čitelná funkce:
+
+| Strategie | Popis |
+|-----------|-------|
+| `kontrarian_long`     | Long při strachu (FGI < entry), exit při euforii (FGI > exit) |
+| `kontrarian_combined` | Střídá LONG/SHORT bez cash; přepíná na sentimentových extrémech |
+| `trend_long`          | Long při euforii (FGI > entry), exit při strachu (FGI < exit) |
+| `trend_combined`      | Trendová verze long+short bez cash |
+| `ma_combined`         | MA crossover sentimentu; long když fast MA > slow MA, jinak short |
+
+Short pozice modelovány jako inverzní ETF: `equity = invested × (entry_price / current_price)`
 
 ---
 
@@ -96,7 +118,8 @@ python strategy/03_analysis.py        # → analysis_chart.png, results_table.pn
 | Normalizace komponent | Rolling Z-score (okna optimalizována per komponenta) |
 | Váhy indexu | Equal (1/7) a OLS regrese na CNN datech 2011–2026 |
 | IS/OOS split | IS: 1998–2015, OOS: 2016–2026 |
-| Backtesting | Next-day execution, long-only i short strategie |
-| Transakční náklady | 0.1% per trade |
+| Backtesting | Next-day execution, long i short strategie |
+| Transakční náklady | 0.1 % per trade |
 | Benchmark | S&P 500 Total Return Index (^SP500TR) |
-| Paralelizace | joblib n_jobs=-1 (všechna CPU jádra) |
+| Paralelizace | joblib n_jobs=−1 (všechna CPU jádra) |
+| Grid search | ~2.36M kombinací parametrů na IS datech |

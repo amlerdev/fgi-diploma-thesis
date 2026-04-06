@@ -1,289 +1,268 @@
 """
-02_out_of_sample.py
-==============
-Out-of-sample validace nejlepších parametrů z grid_results.csv.
+Out-of-sample validace — testování best IS parametrů na OOS datech.
 
-Selekce: top 1 per strategie × FGI varianta (podle Total Return IS)
-Strategie: mr_long, mr_short, mom_long, mom_short, mr_long_ma, mom_long_ma
+Načte grid_results.csv, vybere TOP 1 per (strategie × fgi_col) podle IS
+total_return a spustí backtest na OOS datech (2016–2026).
 
-IS:  1998-01-01 → 2015-12-31
-OOS: 2016-01-01 → 2026-12-31
+Speciální případ ma_combined: rolling MA se počítá z celého datasetu
+(IS+OOS dohromady), aby slow MA měla plný warmup na začátku OOS periody.
+Trading ale začíná až od OOS_START.
 
-Výstup: oos_results.csv
-
-Author: Petr Amler (AML0005)
+Výstup: oos_results.csv s prefixovanými sloupci is_* a oos_*.
 """
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
-# ── Konfigurace ───────────────────────────────────────────────────────────────
-STRATEGY_DIR = Path(__file__).resolve().parent
-INPUT        = STRATEGY_DIR.parent / 'index' / 'fgi_index_final.csv'
-GRID         = STRATEGY_DIR / 'grid_results.csv'
-OUTPUT       = STRATEGY_DIR / 'oos_results.csv'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-IS_START  = '1998-01-01'
-IS_END    = '2015-12-31'
-OOS_START = '2016-01-01'
-OOS_END   = '2026-12-31'
+from config import (
+    FEE, FGI_COLS, INITIAL, INPUT,
+    IS_END, IS_START, OOS_END, OOS_START, STRATEGY_DIR,
+)
+from backtester import STRATEGIES, compute_metrics
 
-INITIAL = 10_000
-FEE     = 0.001   # 0.1% per trade (buy + sell = 0.2% round-trip)
 
-MA_STRATEGIES = {'mr_long_ma', 'mom_long_ma'}
+def load_best_params(grid_path: Path) -> pd.DataFrame:
+    """
+    Načte grid_results.csv a vrátí TOP 1 per (strategy × fgi_col)
+    podle IS total_return.
+    """
+    df = pd.read_csv(grid_path)
+    best = (
+        df.sort_values('total_return', ascending=False)
+        .groupby(['strategy', 'fgi_col'], sort=False)
+        .first()
+        .reset_index()
+    )
+    return best
 
-# ── Načtení dat ───────────────────────────────────────────────────────────────
-print("=" * 70)
-print("UNIFIED OUT-OF-SAMPLE VALIDACE (2016–2026)")
-print("=" * 70)
 
-df     = pd.read_csv(INPUT, parse_dates=['Date'], index_col='Date')
-df_is  = df.loc[IS_START:IS_END].dropna(subset=['SP500_Close'])
-df_oos = df.loc[OOS_START:OOS_END].dropna(subset=['SP500_Close'])
+def run_oos(
+    row:       pd.Series,
+    df_full:   pd.DataFrame,
+    df_oos:    pd.DataFrame,
+) -> dict:
+    """
+    Spustí OOS backtest pro jednu konfiguraci (řádek z best params).
 
-print(f"\nIS:  {df_is.index[0].date()} → {df_is.index[-1].date()}  ({len(df_is):,} dní)")
-print(f"OOS: {df_oos.index[0].date()} → {df_oos.index[-1].date()}  ({len(df_oos):,} dní)")
+    Pro ma_combined: fg array pochází z celého datasetu (IS+OOS),
+    ale trading startuje až indexem odpovídajícím OOS_START.
+    Pro ostatní strategie: použije se pouze OOS slice.
 
-# ── Metriky ───────────────────────────────────────────────────────────────────
-def compute_metrics(equity: np.ndarray, trades: int) -> dict:
-    n        = len(equity)
-    total_r  = (equity[-1] - INITIAL) / INITIAL * 100
-    cagr     = ((equity[-1] / INITIAL) ** (252 / n) - 1) * 100 if equity[-1] > 0 else -100.0
-    daily_r  = np.diff(equity) / equity[:-1]
-    sharpe   = daily_r.mean() / daily_r.std() * np.sqrt(252) if daily_r.std() > 0 else 0.0
-    roll_max = np.maximum.accumulate(equity)
-    max_dd   = ((equity - roll_max) / roll_max * 100).min()
-    calmar   = cagr / abs(max_dd) if max_dd != 0 else 0.0
-    return {
-        'total_return': round(total_r, 2),
-        'cagr':         round(cagr,    2),
-        'sharpe':       round(sharpe,  3),
-        'max_dd':       round(max_dd,  2),
-        'calmar':       round(calmar,  3),
-        'trades':       trades,
-    }
-
-# ── Backtestery ───────────────────────────────────────────────────────────────
-def mr_long(prices, fg, entry, exit_):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); shares = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if fg[i] < entry and shares == 0 and cash > 0:
-            shares = cash * (1 - FEE) / prices[i+1]; cash = 0.0; trades += 1
-        elif fg[i] > exit_ and shares > 0:
-            cash = shares * prices[i+1] * (1 - FEE); shares = 0.0; trades += 1
-        equity[i] = cash + shares * prices[i]
-    if shares > 0: cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
-
-def mr_short(prices, fg, entry, exit_):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); short_sh = 0.0; entry_px = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if fg[i] > exit_ and short_sh == 0 and cash > 0:
-            short_sh = cash * (1 - FEE) / prices[i+1]; entry_px = prices[i+1]; trades += 1
-        elif fg[i] < entry and short_sh > 0:
-            cash += (entry_px - prices[i+1]) * short_sh - FEE * prices[i+1] * short_sh
-            short_sh = 0.0; trades += 1
-        equity[i] = cash + ((entry_px - prices[i]) * short_sh if short_sh > 0 else 0.0)
-    if short_sh > 0:
-        cash += (entry_px - prices[-1]) * short_sh - FEE * prices[-1] * short_sh
-    equity[-1] = cash
-    return equity, trades
-
-def mom_long(prices, fg, entry, exit_):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); shares = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if fg[i] > entry and shares == 0 and cash > 0:
-            shares = cash * (1 - FEE) / prices[i+1]; cash = 0.0; trades += 1
-        elif fg[i] < exit_ and shares > 0:
-            cash = shares * prices[i+1] * (1 - FEE); shares = 0.0; trades += 1
-        equity[i] = cash + shares * prices[i]
-    if shares > 0: cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
-
-def mom_short(prices, fg, entry, exit_):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); short_sh = 0.0; entry_px = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if fg[i] < entry and short_sh == 0 and cash > 0:
-            short_sh = cash * (1 - FEE) / prices[i+1]; entry_px = prices[i+1]; trades += 1
-        elif fg[i] > exit_ and short_sh > 0:
-            cash += (entry_px - prices[i+1]) * short_sh - FEE * prices[i+1] * short_sh
-            short_sh = 0.0; trades += 1
-        equity[i] = cash + ((entry_px - prices[i]) * short_sh if short_sh > 0 else 0.0)
-    if short_sh > 0:
-        cash += (entry_px - prices[-1]) * short_sh - FEE * prices[-1] * short_sh
-    equity[-1] = cash
-    return equity, trades
-
-def mr_long_ma(prices, fg, entry, exit_, ma_fast, ma_slow):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); shares = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if (fg[i] < entry and ma_fast[i] > ma_slow[i]
-                and shares == 0 and cash > 0):
-            shares = cash * (1 - FEE) / prices[i+1]; cash = 0.0; trades += 1
-        elif fg[i] > exit_ and shares > 0:
-            cash = shares * prices[i+1] * (1 - FEE); shares = 0.0; trades += 1
-        equity[i] = cash + shares * prices[i]
-    if shares > 0: cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
-
-def mom_long_ma(prices, fg, entry, exit_, ma_fast, ma_slow):
-    equity = np.empty(len(prices))
-    cash = float(INITIAL); shares = 0.0; trades = 0
-    for i in range(len(prices) - 1):
-        if (fg[i] > entry and ma_fast[i] > ma_slow[i]
-                and shares == 0 and cash > 0):
-            shares = cash * (1 - FEE) / prices[i+1]; cash = 0.0; trades += 1
-        elif fg[i] < exit_ and shares > 0:
-            cash = shares * prices[i+1] * (1 - FEE); shares = 0.0; trades += 1
-        equity[i] = cash + shares * prices[i]
-    if shares > 0: cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
-
-STRATEGY_FNS = {
-    'mr_long':  mr_long,  'mr_short':  mr_short,
-    'mom_long': mom_long, 'mom_short': mom_short,
-}
-
-# ── Pomocná funkce: spusť backtest na daném období ────────────────────────────
-FGV_MAP = {'FG_Equal': 'FGI_Equal', 'FG_OLS': 'FGI_OLS'}
-
-def run_period(df_period, row):
-    pr       = df_period['SP500_Close'].values
-    fgv      = FGV_MAP.get(row['fg_variant'], row['fg_variant'])
-    fg       = df_period[fgv].ffill().values
-    e, x     = int(row['entry']), int(row['exit'])
+    OOS backtest vždy startuje s cash = INITIAL (žádná přenesená pozice z IS).
+    """
     strategy = row['strategy']
+    fgi_col  = row['fgi_col']
+    fn       = STRATEGIES[strategy]
 
-    if strategy in MA_STRATEGIES:
-        fg_series = df_period[FGV_MAP.get(fgv, fgv)].ffill()
-        maf = fg_series.rolling(int(row['fast_ma']), min_periods=int(row['fast_ma'])).mean().values
-        mas = fg_series.rolling(int(row['slow_ma']), min_periods=int(row['slow_ma'])).mean().values
-        if strategy == 'mr_long_ma':
-            eq, tr = mr_long_ma(pr, fg, e, x, maf, mas)
-        else:
-            eq, tr = mom_long_ma(pr, fg, e, x, maf, mas)
+    prices_oos = df_oos['SP500_Close'].to_numpy(dtype=float)
+
+    if strategy == 'ma_combined':
+        fast = int(row['fast'])
+        slow = int(row['slow'])
+
+        # Rolling MA z celého datasetu pro správný warmup slow MA
+        fg_full       = df_full[fgi_col].to_numpy(dtype=float)
+        oos_start_idx = df_full.index.get_loc(df_oos.index[0])
+        ma_fast_oos   = pd.Series(fg_full).rolling(fast, min_periods=fast).mean().to_numpy()[oos_start_idx:]
+        ma_slow_oos   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_start_idx:]
+
+        eq, trades = _ma_combined_oos(prices_oos, ma_fast_oos, ma_slow_oos)
     else:
-        eq, tr = STRATEGY_FNS[strategy](pr, fg, e, x)
+        fg_oos = df_oos[fgi_col].to_numpy(dtype=float)
+        params = {'entry': int(row['entry']), 'exit': int(row['exit'])}
+        eq, trades = fn(prices_oos, fg_oos, **params)
 
-    return compute_metrics(eq, tr)
+    return compute_metrics(eq, trades)
 
-# ── Selekce top 1 per strategie × FGI varianta ────────────────────────────────
-print("\nNačítám grid_results.csv...")
-df_grid = pd.read_csv(GRID)
-print(f"   {len(df_grid):,} řádků celkem")
 
-all_strategies = ['mr_long', 'mr_short', 'mom_long', 'mom_short',
-                  'mr_long_ma', 'mom_long_ma']
+def _ma_combined_oos(
+    prices:  np.ndarray,
+    ma_fast: np.ndarray,
+    ma_slow: np.ndarray,
+) -> tuple[np.ndarray, int]:
+    """
+    ma_combined s externě předpočítanými MA.
+    MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
+    Logika identická s backtester.ma_combined.
+    """
+    cash        = float(INITIAL)
+    shares      = 0.0    # počet akcií v long pozici
+    invested    = 0.0    # investovaná částka v short pozici
+    entry_price = 0.0    # vstupní cena short pozice
+    trades      = 0
+    equity      = np.empty(len(prices))
 
-# Dynamický filtr: entry/exit musí být v dosažitelném rozsahu IS dat (±2 tolerance)
-TOL = 2
-fgi_valid = {}
-for raw_name, idx_name in FGV_MAP.items():
-    if idx_name in df_is.columns:
-        s  = df_is[idx_name].ffill().dropna()
-        lo = max(1,  int(s.min()) - TOL)
-        hi = min(99, int(s.max()) + TOL)
-        fgi_valid[raw_name] = (lo, hi)
-        print(f"   {raw_name}: grid [{lo}, {hi}]")
+    for i in range(len(prices) - 1):
 
-def in_range(row):
-    fgv = row['fg_variant']
-    if fgv not in fgi_valid:
-        return True
-    lo, hi = fgi_valid[fgv]
-    return lo <= row['entry'] <= hi and lo <= row['exit'] <= hi
-
-mask_range = df_grid.apply(in_range, axis=1)
-df_grid_f  = df_grid[mask_range]
-print(f"   Po filtraci rozsahu: {len(df_grid_f):,} řádků")
-
-top = (df_grid_f[df_grid_f['strategy'].isin(all_strategies)]
-       .sort_values('total_return', ascending=False)
-       .groupby(['fg_variant', 'strategy'])
-       .first()
-       .reset_index())
-
-print(f"   Vybrané konfigurace: {len(top)} (top 1 per strategie × FGI varianta)")
-
-# ── Výpočet IS + OOS ──────────────────────────────────────────────────────────
-print("\nPočítám IS a OOS výsledky...")
-rows = []
-for _, row in top.iterrows():
-    is_m  = run_period(df_is,  row)
-    oos_m = run_period(df_oos, row)
-    fast  = int(row['fast_ma']) if pd.notna(row['fast_ma']) else None
-    slow  = int(row['slow_ma']) if pd.notna(row['slow_ma']) else None
-    rows.append({
-        'fg_variant': row['fg_variant'],
-        'strategy':   row['strategy'],
-        'entry':      int(row['entry']),
-        'exit':       int(row['exit']),
-        'fast_ma':    fast,
-        'slow_ma':    slow,
-        **{f'is_{k}':  v for k, v in is_m.items()},
-        **{f'oos_{k}': v for k, v in oos_m.items()},
-    })
-
-df_out = pd.DataFrame(rows)
-df_out.to_csv(OUTPUT, index=False)
-print(f"Uloženo: {OUTPUT}")
-
-# ── Buy & Hold benchmark ──────────────────────────────────────────────────────
-def bh_metrics(df_period):
-    pr = df_period['SP500_Close'].values
-    eq = INITIAL * pr / pr[0]
-    return compute_metrics(eq, 0)
-
-bh_is  = bh_metrics(df_is)
-bh_oos = bh_metrics(df_oos)
-
-# ── Výpis výsledků ────────────────────────────────────────────────────────────
-print("\n" + "=" * 75)
-print("VÝSLEDKY: IN-SAMPLE vs OUT-OF-SAMPLE")
-print("=" * 75)
-
-header = (f"\n  {'Strategie':<18} {'entry':>5} {'exit':>5} {'fast':>5} {'slow':>5}  "
-          f"{'IS Ret':>8} {'IS Shr':>6} {'IS DD':>7}  "
-          f"{'OOS Ret':>8} {'OOS Shr':>6} {'OOS DD':>7}")
-sep = "  " + "─" * 73
-
-print(f"\n{'─'*75}")
-print(f"  BUY & HOLD (S&P 500 Total Return)")
-print(f"{'─'*75}")
-print(header)
-print(sep)
-print(f"  {'buy_and_hold':<18} {'—':>5} {'—':>5} {'—':>5} {'—':>5}  "
-      f"{bh_is['total_return']:>7.1f}% {bh_is['sharpe']:>6.2f} {bh_is['max_dd']:>6.1f}%  "
-      f"{bh_oos['total_return']:>7.1f}% {bh_oos['sharpe']:>6.2f} {bh_oos['max_dd']:>6.1f}%")
-
-for fgi_var in df_out['fg_variant'].unique():
-    sub = df_out[df_out['fg_variant'] == fgi_var]
-    print(f"\n{'─'*75}")
-    print(f"  {fgi_var}")
-    print(f"{'─'*75}")
-    print(header)
-    print(sep)
-    for strat in all_strategies:
-        r = sub[sub['strategy'] == strat]
-        if r.empty:
+        # Warmup — slow MA ještě nemá dostatek dat
+        if np.isnan(ma_slow[i]):
+            equity[i] = cash
             continue
-        r = r.iloc[0]
-        fast = int(r['fast_ma']) if pd.notna(r['fast_ma']) else 0
-        slow = int(r['slow_ma']) if pd.notna(r['slow_ma']) else 0
-        print(f"  {strat:<18} {int(r['entry']):>5} {int(r['exit']):>5}"
-              f" {fast:>5} {slow:>5}  "
-              f"{r['is_total_return']:>7.1f}% {r['is_sharpe']:>6.2f} {r['is_max_dd']:>6.1f}%  "
-              f"{r['oos_total_return']:>7.1f}% {r['oos_sharpe']:>6.2f} {r['oos_max_dd']:>6.1f}%")
 
-print("\nHotovo — spust 03_analysis.py pro detailní grafy")
+        if ma_fast[i] > ma_slow[i]:
+            # Fast MA nad slow MA — sentiment roste, chceme být LONG
+
+            if invested > 0.0:
+                # Přechod SHORT → LONG: uzavři short...
+                cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
+                invested    = 0.0
+                entry_price = 0.0
+                trades     += 1
+                # ...a nakup long
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
+
+            elif shares == 0.0:
+                # První vstup do LONG
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
+
+        elif ma_fast[i] < ma_slow[i]:
+            # Fast MA pod slow MA — sentiment klesá, chceme být SHORT
+
+            if shares > 0.0:
+                # Přechod LONG → SHORT: prodej long...
+                cash    = shares * prices[i + 1] * (1 - FEE)
+                shares  = 0.0
+                trades += 1
+                # ...a otevři short
+                invested    = cash * (1 - FEE)
+                entry_price = prices[i + 1]
+                cash        = 0.0
+                trades     += 1
+
+            elif invested == 0.0:
+                # První vstup do SHORT
+                invested    = cash * (1 - FEE)
+                entry_price = prices[i + 1]
+                cash        = 0.0
+                trades     += 1
+
+        # Aktuální hodnota portfolia
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        elif invested > 0.0:
+            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
+        else:
+            equity[i] = cash
+
+        if equity[i] <= 0.0:
+            equity[i:] = 0.0
+            return equity, trades
+
+    # Uzavři pozici na konci období
+    if shares > 0.0:
+        cash = shares * prices[-1] * (1 - FEE)
+    elif invested > 0.0:
+        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
+    equity[-1] = cash
+    return equity, trades
+
+
+def main() -> None:
+    # ---- Načtení dat -------------------------------------------------------
+    df_full = pd.read_csv(INPUT, index_col='Date', parse_dates=True)
+    df_is   = df_full.loc[IS_START:IS_END].copy()
+    df_oos  = df_full.loc[OOS_START:OOS_END].copy()
+
+    prices_is  = df_is['SP500_Close'].to_numpy(dtype=float)
+    prices_oos = df_oos['SP500_Close'].to_numpy(dtype=float)
+
+    # B&H benchmarky
+    bh_is  = compute_metrics(INITIAL * prices_is  / prices_is[0],  0)
+    bh_oos = compute_metrics(INITIAL * prices_oos / prices_oos[0], 0)
+
+    # ---- Načtení best IS parametrů ----------------------------------------
+    grid_path = STRATEGY_DIR / 'grid_results.csv'
+    if not grid_path.exists():
+        raise FileNotFoundError(
+            f'Soubor {grid_path} nenalezen. Nejprve spusť 01_grid_search.py.'
+        )
+    best = load_best_params(grid_path)
+    print(f'Načteno {len(best)} best konfigurací z {grid_path.name}')
+    print(f'OOS perioda: {OOS_START} → {OOS_END}  ({len(df_oos)} barů)\n')
+
+    # ---- OOS backtest pro každou konfiguraci ------------------------------
+    records = []
+    for _, row in best.iterrows():
+        is_metrics  = {f'is_{k}':  v for k, v in row.items()
+                       if k in ('total_return', 'cagr', 'sharpe', 'max_dd', 'calmar', 'trades')}
+        oos_metrics = run_oos(row, df_full, df_oos)
+        oos_metrics = {f'oos_{k}': v for k, v in oos_metrics.items()}
+
+        # Parametry pro výstupní CSV
+        record = {
+            'strategy':       row['strategy'],
+            'fgi_col':        row['fgi_col'],
+            'entry': row.get('entry', float('nan')),
+            'exit':  row.get('exit',  float('nan')),
+            'fast':           row.get('fast', float('nan')),
+            'slow':           row.get('slow', float('nan')),
+            **is_metrics,
+            **oos_metrics,
+        }
+        records.append(record)
+
+    df_out = pd.DataFrame(records)
+
+    # ---- Uložení -----------------------------------------------------------
+    out_path = STRATEGY_DIR / 'oos_results.csv'
+    df_out.to_csv(out_path, index=False)
+    print(f'Uloženo: {out_path}')
+
+    # ---- Srovnávací tabulka IS vs OOS -------------------------------------
+    SEP  = '=' * 100
+    SEP2 = '-' * 100
+    print(f'\n{SEP}')
+    print('IS vs OOS — srovnání výkonnosti (TOP 1 per strategie × FGI)')
+    print(SEP)
+
+    hdr = (
+        f'{"Strategie":<23}  {"FGI":<10}  {"Parametry":<20}'
+        f'  {"IS Return":>9}  {"IS Sharpe":>9}  {"IS MaxDD":>8}'
+        f'  {"OOS Return":>10}  {"OOS Sharpe":>10}  {"OOS MaxDD":>9}'
+    )
+    print(hdr)
+    print(SEP2)
+
+    for _, row in df_out.sort_values(['strategy', 'fgi_col']).iterrows():
+        if row['strategy'] == 'ma_combined':
+            pstr = f"f={int(row['fast'])} s={int(row['slow'])}"
+        else:
+            pstr = f"entry={int(row['entry'])} exit={int(row['exit'])}"
+
+        print(
+            f'{row["strategy"]:<23}  {row["fgi_col"]:<10}  {pstr:<20}'
+            f'  {row["is_total_return"]:>+8.1f}%  {row["is_sharpe"]:>+8.2f}'
+            f'  {row["is_max_dd"]:>+7.1f}%'
+            f'  {row["oos_total_return"]:>+9.1f}%  {row["oos_sharpe"]:>+9.2f}'
+            f'  {row["oos_max_dd"]:>+8.1f}%'
+        )
+
+    print(SEP2)
+    print(
+        f'{"Buy & Hold":<23}  {"IS":<10}  {"":<20}'
+        f'  {bh_is["total_return"]:>+8.1f}%  {bh_is["sharpe"]:>+8.2f}'
+        f'  {bh_is["max_dd"]:>+7.1f}%'
+        f'  {"":<10}  {"":<10}  {"":<9}'
+    )
+    print(
+        f'{"Buy & Hold":<23}  {"OOS":<10}  {"":<20}'
+        f'  {"":<9}  {"":<9}  {"":<8}'
+        f'  {bh_oos["total_return"]:>+9.1f}%  {bh_oos["sharpe"]:>+9.2f}'
+        f'  {bh_oos["max_dd"]:>+8.1f}%'
+    )
+    print(SEP)
+
+
+if __name__ == '__main__':
+    main()
