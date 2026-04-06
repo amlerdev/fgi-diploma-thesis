@@ -98,7 +98,7 @@ def run_task(
     Data (prices, fg) jsou předávána jako argumenty —
     žádné globální proměnné ve workerech.
     """
-    fn        = STRATEGIES[strategy]
+    fn = STRATEGIES[strategy]
     eq, trades = fn(prices, fg, **params)
 
     if trades < MIN_TRADES:
