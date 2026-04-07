@@ -3,7 +3,7 @@ validate_index.py
 =================
 Validace dvou variant indexu proti CNN Fear & Greed (2011–2026).
 
-Metriky: Pearson r, R², MAE, RMSE, Bias, P90 absolutní chyby
+Metriky: Pearson r, R², MAE, MBE, P90 absolutní chyby
 Výstup:  validation_chart.png (do code/index/)
 
 Vstup:  code/data/fgi_index_final.csv
@@ -52,8 +52,7 @@ def compute_stats(actual, predicted):
         'r':    r,
         'r2':   r ** 2,
         'mae':  abs_err.mean(),
-        'rmse': np.sqrt((err ** 2).mean()),
-        'bias': err.mean(),
+        'mbe':  err.mean(),
         'p90':  abs_err.quantile(0.90),
     }
 
@@ -69,13 +68,13 @@ for col, color, label in VARIANTS:
 print(f"\n{'Metrika':<18} {'Equal (1/7)':>14} {'OLS':>14}")
 print(f"{'-'*48}")
 for key, label in [('r','Pearson r'), ('r2','R²'), ('mae','MAE'),
-                   ('rmse','RMSE'), ('bias','Bias'), ('p90','P90 |chyba|'), ('n','n (dní)')]:
+                   ('mbe','MBE'), ('p90','P90 |chyba|'), ('n','n (dní)')]:
     row = f"   {label:<16}"
     for col, _, _ in VARIANTS:
         val = results[col][key]
         if key == 'n':
             row += f" {int(val):>14,}"
-        elif key == 'bias':
+        elif key == 'mbe':
             row += f" {val:>+14.3f}"
         elif key in ('r', 'r2'):
             row += f" {val:>14.4f}"
@@ -83,12 +82,12 @@ for key, label in [('r','Pearson r'), ('r2','R²'), ('mae','MAE'),
             row += f" {val:>14.3f}"
     print(row)
 
-# ── Bias podle CNN pásem ──────────────────────────────────────────────────────
+# ── MBE podle CNN pásem ───────────────────────────────────────────────────────
 bins        = [0, 25, 45, 55, 75, 100]
 zone_labels = ['Extreme Fear (0–25)', 'Fear (25–45)', 'Neutral (45–55)',
                'Greed (55–75)', 'Extreme Greed (75–100)']
 
-print(f"\nBias podle CNN pásem:")
+print(f"\nMBE podle CNN pásem:")
 print(f"   {'Pásmo':<24} {'Equal':>10} {'OLS':>10}")
 print(f"   {'-'*46}")
 for zone in zone_labels:
@@ -101,20 +100,20 @@ for zone in zone_labels:
         row += f" {bias:>+10.2f}"
     print(row)
 
-# ── Příprava bias per pásmo pro grafy ────────────────────────────────────────
+# ── Příprava MBE per pásmo pro grafy ─────────────────────────────────────────
 zone_labels_short = ['Extreme Fear\n(0–25)', 'Fear\n(25–45)', 'Neutral\n(45–55)',
                      'Greed\n(55–75)', 'Extreme Greed\n(75–100)']
 zone_colors       = ['#F44336', '#FF9800', '#9E9E9E', '#8BC34A', '#4CAF50']
 
-def zone_biases(col):
+def zone_mbe(col):
     ov = get_overlap(col).copy()
     ov['zone'] = pd.cut(ov['CNN_FearGreed'], bins=bins,
                         labels=zone_labels_short, include_lowest=True)
-    biases = []
+    mbe_values = []
     for z in zone_labels_short:
         sub = ov[ov['zone'] == z]
-        biases.append((sub[col] - sub['CNN_FearGreed']).mean() if len(sub) > 0 else 0.0)
-    return biases
+        mbe_values.append((sub[col] - sub['CNN_FearGreed']).mean() if len(sub) > 0 else 0.0)
+    return mbe_values
 
 # ── Vizualizace ───────────────────────────────────────────────────────────────
 ov_base = get_overlap('FGI_Equal')
@@ -162,18 +161,18 @@ for i, (col, color, label) in enumerate(VARIANTS):
     ax.set_xlim(0, 100); ax.set_ylim(0, 100)
     ax.grid(True, alpha=0.3)
 
-# Řada 3: Bias podle CNN pásem
+# Řada 3: MBE podle CNN pásem
 for i, (col, color, label) in enumerate(VARIANTS):
-    ax     = fig.add_subplot(gs[2, i])
-    biases = zone_biases(col)
-    bars   = ax.bar(zone_labels_short, biases, color=zone_colors, alpha=0.85, edgecolor='white')
-    for bar, val in zip(bars, biases):
+    ax         = fig.add_subplot(gs[2, i])
+    mbe_values = zone_mbe(col)
+    bars       = ax.bar(zone_labels_short, mbe_values, color=zone_colors, alpha=0.85, edgecolor='white')
+    for bar, val in zip(bars, mbe_values):
         ypos = bar.get_height() + 0.15 if val >= 0 else bar.get_height() - 0.8
         ax.text(bar.get_x() + bar.get_width() / 2, ypos,
                 f'{val:+.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
     ax.axhline(0, color='black', linewidth=1.0)
-    ax.set_ylabel('Průměrný bias (body)')
-    ax.set_title(f'Bias podle CNN pásma: {label}')
+    ax.set_ylabel('MBE (body)')
+    ax.set_title(f'MBE podle CNN pásma: {label}')
     ax.tick_params(axis='x', labelsize=7)
     ax.grid(axis='y', alpha=0.3)
 
@@ -188,8 +187,7 @@ for i, (col, color, label) in enumerate(VARIANTS):
         ['Pearson r',     f"{s['r']:.4f}"],
         ['R²',            f"{s['r2']:.4f}"],
         ['MAE (body)',    f"{s['mae']:.2f}"],
-        ['RMSE (body)',   f"{s['rmse']:.2f}"],
-        ['Bias',          f"{s['bias']:+.2f}"],
+        ['MBE',           f"{s['mbe']:+.2f}"],
         ['P90 |chyba|',   f"{s['p90']:.1f}"],
         ['Počet dní',     f"{s['n']:,}"],
         ['Období',        f"{ov.index[0].date()} → {ov.index[-1].date()}"],
