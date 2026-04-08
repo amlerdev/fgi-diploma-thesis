@@ -24,8 +24,8 @@ ENTRY_TREND_RANGE = list(range(50, 100, 1))
 EXIT_TREND_RANGE  = list(range(1,  49, 1))
 
 # Grid search rozsahy — MA combined
-FAST_RANGE = list(range(1,  35, 1))
-SLOW_RANGE = list(range(20, 301, 5))
+FAST_RANGE = list(range(1,  11, 1))
+SLOW_RANGE = list(range(5,  64, 1))
 # Podmínka fast < slow vynucena při sestavování tasků
 
 # Minimální počet obchodů pro zahrnutí výsledku

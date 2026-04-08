@@ -47,7 +47,9 @@ def build_tasks() -> list[tuple[str, str, dict]]:
                    podmínka entry < exit vždy splněna (max entry=48 < 50=min exit).
     Trendové:      entry ∈ ENTRY_TREND_RANGE (50–99), exit ∈ EXIT_TREND_RANGE (1–48)
                    podmínka entry > exit vždy splněna (min entry=50 > 48=max exit).
-    MA combined:   fast ∈ FAST_RANGE (1–34), slow ∈ SLOW_RANGE (20–300, krok 5)
+    MA combined:   fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (5–63)
+                   podmínka fast < slow vynucena explicitně.
+    MA long:       fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (5–63)
                    podmínka fast < slow vynucena explicitně.
     """
     tasks: list[tuple[str, str, dict]] = []
@@ -75,6 +77,15 @@ def build_tasks() -> list[tuple[str, str, dict]]:
                 if fast >= slow:
                     continue
                 tasks.append(('ma_combined', fgi_col,
+                               {'fast': fast, 'slow': slow}))
+
+    # MA long
+    for fgi_col in FGI_COLS:
+        for fast in FAST_RANGE:
+            for slow in SLOW_RANGE:
+                if fast >= slow:
+                    continue
+                tasks.append(('ma_long', fgi_col,
                                {'fast': fast, 'slow': slow}))
 
     return tasks
@@ -146,6 +157,7 @@ def main() -> None:
             for slow in SLOW_RANGE:
                 if fast < slow:
                     n_ma += 1
+    n_ma *= 2   # dvě MA strategie: ma_combined + ma_long
 
     print(f'Grid search — IS: {IS_START} → {IS_END}  ({len(df_is)} barů)')
     print(f'  Kontr. tasků      : {n_kontr:>6d}'
@@ -154,7 +166,7 @@ def main() -> None:
           f'  (2 FGI × 2 strat × {len(ENTRY_TREND_RANGE)} × {len(EXIT_TREND_RANGE)})')
     print(f'  Level-based celkem: {n_level:>6d}')
     print(f'  MA tasků          : {n_ma:>6d}'
-          f'  (2 FGI × {n_ma // len(FGI_COLS)} fast/slow kombinací)')
+          f'  (2 FGI × 2 strat × {n_ma // (len(FGI_COLS) * 2)} fast/slow kombinací)')
     print(f'  Celkem            : {len(all_tasks):>6d}')
     est_sec = len(all_tasks) * 2e-3   # ~2 ms/task odhad
     print(f'  Odhadovaný čas    : ~{est_sec:.0f}s (záleží na počtu jader)')
@@ -208,7 +220,7 @@ def main() -> None:
     best      = best.sort_values(['strategy', 'fgi_col'])
 
     for _, row in best.iterrows():
-        if row['strategy'] == 'ma_combined':
+        if row['strategy'] in ('ma_combined', 'ma_long'):
             pstr = f"fast={int(row['fast'])} slow={int(row['slow'])}"
         else:
             pstr = f"entry={int(row['entry'])} exit={int(row['exit'])}"

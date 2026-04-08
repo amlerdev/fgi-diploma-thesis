@@ -48,9 +48,7 @@ def _build_equity(row: pd.Series, prices: np.ndarray, fg: np.ndarray) -> np.ndar
     strategy = row['strategy']
     fn       = STRATEGIES[strategy]
 
-    if strategy == 'ma_combined':
-        # Volá se až po předpočítání MA externě — zde použijeme interní funkci
-        # s fg, fast, slow (MA se spočítá uvnitř)
+    if strategy in ('ma_combined', 'ma_long'):
         eq, _ = fn(prices, fg, fast=int(row['fast']), slow=int(row['slow']))
     else:
         eq, _ = fn(
@@ -149,6 +147,61 @@ def _build_equity_ma_oos(
     return equity
 
 
+def _build_equity_ma_long_oos(
+    row:     pd.Series,
+    df_full: pd.DataFrame,
+    df_oos:  pd.DataFrame,
+) -> np.ndarray:
+    """
+    Rekonstruuje equity křivku pro ma_long na OOS datech.
+    MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
+    Bez short větve — pouze long nebo hotovost.
+    """
+    fgi_col = row['fgi_col']
+    fast    = int(row['fast'])
+    slow    = int(row['slow'])
+
+    fg_full = df_full[fgi_col].to_numpy(dtype=float)
+    oos_idx = df_full.index.get_loc(df_oos.index[0])
+    ma_fast = pd.Series(fg_full).rolling(fast, min_periods=fast).mean().to_numpy()[oos_idx:]
+    ma_slow = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_idx:]
+    prices  = df_oos['SP500_Close'].to_numpy(dtype=float)
+
+    cash   = float(INITIAL)
+    shares = 0.0
+    equity = np.empty(len(prices))
+
+    for i in range(len(prices) - 1):
+
+        if np.isnan(ma_slow[i]):
+            equity[i] = cash
+            continue
+
+        if ma_fast[i] > ma_slow[i]:
+            if shares == 0.0:
+                shares = cash * (1 - FEE) / prices[i + 1]
+                cash   = 0.0
+
+        elif ma_fast[i] < ma_slow[i]:
+            if shares > 0.0:
+                cash   = shares * prices[i + 1] * (1 - FEE)
+                shares = 0.0
+
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        else:
+            equity[i] = cash
+
+        if equity[i] <= 0.0:
+            equity[i:] = 0.0
+            return equity
+
+    if shares > 0.0:
+        cash = shares * prices[-1] * (1 - FEE)
+    equity[-1] = cash
+    return equity
+
+
 # ---------------------------------------------------------------------------
 # Tabulka IS vs OOS (PNG)
 # ---------------------------------------------------------------------------
@@ -157,7 +210,7 @@ def plot_results_table(df_oos: pd.DataFrame, bh_is: dict, bh_oos: dict) -> None:
     """Uloží přehlednou tabulku IS vs OOS jako PNG."""
     rows = []
     for _, r in df_oos.sort_values(['strategy', 'fgi_col']).iterrows():
-        if r['strategy'] == 'ma_combined':
+        if r['strategy'] in ('ma_combined', 'ma_long'):
             pstr = f"fast={int(r['fast'])} slow={int(r['slow'])}"
         else:
             pstr = f"entry={int(r['entry'])} exit={int(r['exit'])}"
@@ -248,16 +301,17 @@ def plot_oos_equity(
 
         if row['strategy'] == 'ma_combined':
             eq = _build_equity_ma_oos(row, df_full, df_oos)
+        elif row['strategy'] == 'ma_long':
+            eq = _build_equity_ma_long_oos(row, df_full, df_oos)
         else:
             eq = _build_equity(row, prices_oos, fg_oos)
 
         rebased = eq / eq[0] * 100.0
 
-        if row['strategy'] == 'ma_combined':
+        if row['strategy'] in ('ma_combined', 'ma_long'):
             label = f"{row['strategy']} {fgi_col} (f={int(row['fast'])},s={int(row['slow'])})"
         else:
-            label = (f"{row['strategy']} {fgi_col}"
-                    f" (e={int(row['entry'])},x={int(row['exit'])})")
+            label = f"{row['strategy']} {fgi_col} (e={int(row['entry'])},x={int(row['exit'])})"
 
         ls = _LS[i % len(_LS)]
         ax.plot(dates_oos, rebased, label=label,
@@ -326,8 +380,8 @@ def plot_full_period(
         fg_oos  = df_oos[fgi_col].to_numpy(dtype=float)
 
         # IS equity (šedě, průhledně)
-        if row['strategy'] == 'ma_combined':
-            eq_is, _ = STRATEGIES['ma_combined'](
+        if row['strategy'] in ('ma_long', 'ma_combined'):
+            eq_is, _ = STRATEGIES[row['strategy']](
                 prices_is, fg_is,
                 fast=int(row['fast']), slow=int(row['slow'])
             )
@@ -341,16 +395,15 @@ def plot_full_period(
         # OOS equity (barevně)
         if row['strategy'] == 'ma_combined':
             eq_oos = _build_equity_ma_oos(row, df_full, df_oos)
+        elif row['strategy'] == 'ma_long':
+            eq_oos = _build_equity_ma_long_oos(row, df_full, df_oos)
         else:
             eq_oos = _build_equity(row, prices_oos, fg_oos)
 
         color = _COLORS[color_idx % len(_COLORS)]
         ls    = _LS[i % len(_LS)]
 
-        if row['strategy'] == 'ma_combined':
-            label = f"{row['strategy']} {fgi_col}"
-        else:
-            label = f"{row['strategy']} {fgi_col}"
+        label = f"{row['strategy']} {fgi_col}"
 
         ax.plot(dates_is,  eq_is,  color=color, linewidth=1.0, linestyle=ls, alpha=0.3)
         ax.plot(dates_oos, eq_oos, color=color, linewidth=1.5, linestyle=ls,
@@ -416,7 +469,7 @@ def main() -> None:
     print(SEP2)
     for _, r in df_oos_res.sort_values(['strategy', 'fgi_col']).iterrows():
         pstr = (f"f={int(r['fast'])} s={int(r['slow'])}"
-                if r['strategy'] == 'ma_combined'
+                if r['strategy'] in ('ma_combined', 'ma_long')
                 else f"entry={int(r['entry'])} exit={int(r['exit'])}")
         print(
             f'{r["strategy"]:<23}  {r["fgi_col"]:<10}  {pstr:<20}'

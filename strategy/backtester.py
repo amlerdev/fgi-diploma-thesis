@@ -6,7 +6,7 @@ Short pozice modelovány jako inverzní ETF:
   equity[i] = invested * (entry_price / prices[i])
 
 Parametry strategií:
-  kontrarian: entry = práh strachu (5–45), exit = práh chamtivosti (50–100)
+  kontrarian: entry = práh strachu (1–49), exit = práh chamtivosti (50–100)
   trend:      entry = práh chamtivosti (50–100), exit = práh strachu (1–49)
   ma:         fast, slow = délky klouzavých průměrů sentimentu
 """
@@ -345,7 +345,71 @@ def trend_combined(
 
 
 # ---------------------------------------------------------------------------
-# Strategie 5 — ma_combined
+# Strategie 5 — ma_long
+# ---------------------------------------------------------------------------
+
+def ma_long(
+    prices: np.ndarray,
+    fg:     np.ndarray,
+    fast:   int,
+    slow:   int,
+) -> tuple[np.ndarray, int]:
+    """
+    MA crossover sentimentu — pouze long strategie.
+    Nakupuje když fast MA > slow MA, prodává do cash když fast MA < slow MA.
+    Při rovnosti MA drží stávající pozici. Nikdy nedrží short.
+    Warmup: prvních `slow` barů zůstává v cash (slow MA není ještě inicializována).
+    """
+    # Předpočítej klouzavé průměry sentimentu — mimo smyčku
+    ma_fast = pd.Series(fg).rolling(fast, min_periods=fast).mean().to_numpy()
+    ma_slow = pd.Series(fg).rolling(slow, min_periods=slow).mean().to_numpy()
+
+    cash   = float(INITIAL)
+    shares = 0.0
+    trades = 0
+    equity = np.empty(len(prices))
+
+    for i in range(len(prices) - 1):
+
+        # Warmup — slow MA ještě nemá dostatek dat
+        if np.isnan(ma_slow[i]):
+            equity[i] = cash
+            continue
+
+        if ma_fast[i] > ma_slow[i]:
+            # Fast MA nad slow MA — sentiment roste, nakup pokud nejsme LONG
+            if shares == 0.0:
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
+            # else: už jsme LONG — nic neděláme
+
+        elif ma_fast[i] < ma_slow[i]:
+            # Fast MA pod slow MA — sentiment klesá, prodej do cash pokud jsme LONG
+            if shares > 0.0:
+                cash    = shares * prices[i + 1] * (1 - FEE)
+                shares  = 0.0
+                trades += 1
+            # else: už jsme v cash — nic neděláme
+
+        # else: fast MA == slow MA — drž stávající pozici beze změny
+
+        equity[i] = cash + shares * prices[i]
+
+        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
+        if equity[i] <= 0.0:
+            equity[i:] = 0.0
+            return equity, trades
+
+    # Uzavři pozici na konci období
+    if shares > 0.0:
+        cash = shares * prices[-1] * (1 - FEE)
+    equity[-1] = cash
+    return equity, trades
+
+
+# ---------------------------------------------------------------------------
+# Strategie 6 — ma_combined
 # ---------------------------------------------------------------------------
 
 def ma_combined(
@@ -456,6 +520,7 @@ STRATEGIES: dict[str, callable] = {
     'kontrarian_combined': kontrarian_combined,
     'trend_long':          trend_long,
     'trend_combined':      trend_combined,
+    'ma_long':             ma_long,
     'ma_combined':         ma_combined,
 }
 
@@ -474,7 +539,7 @@ if __name__ == '__main__':
     print(f'{"Strategie":<25}  {"return":>8}  {"trades":>6}  {"sharpe":>7}  {"max_dd":>8}')
     print('-' * 60)
     for name, fn in STRATEGIES.items():
-        if name == 'ma_combined':
+        if name in ('ma_long', 'ma_combined'):
             eq, tr = fn(fake_prices, fake_fg, fast=10, slow=50)
         else:
             eq, tr = fn(fake_prices, fake_fg, entry=25, exit=75)

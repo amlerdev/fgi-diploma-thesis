@@ -118,7 +118,7 @@ def zone_mbe(col):
 # ── Vizualizace ───────────────────────────────────────────────────────────────
 ov_base = get_overlap('FGI_Equal')
 
-fig = plt.figure(figsize=(14, 18))
+fig = plt.figure(figsize=(14, 14))
 fig.suptitle(
     "Validace rekonstrukce Fear & Greed Indexu (2011–2026)\n"
     f"Equal r={results['FGI_Equal']['r']:.3f}  |  "
@@ -126,7 +126,7 @@ fig.suptitle(
     fontsize=13, fontweight='bold', y=0.99
 )
 
-gs = gridspec.GridSpec(4, 2, figure=fig, hspace=0.55, wspace=0.35)
+gs = gridspec.GridSpec(3, 2, figure=fig, hspace=0.55, wspace=0.35)
 
 # Řada 1: Časová řada (plná šířka)
 ax1 = fig.add_subplot(gs[0, :])
@@ -144,41 +144,35 @@ ax1.legend(fontsize=9, loc='upper left')
 ax1.set_ylim(0, 100)
 ax1.grid(True, alpha=0.3)
 
-# Řada 2: Scatter plot
+# Řada 2: MBE podle CNN pásem
 for i, (col, color, label) in enumerate(VARIANTS):
-    ax = fig.add_subplot(gs[1, i])
-    ov = get_overlap(col)
-    ax.scatter(ov['CNN_FearGreed'], ov[col], alpha=0.12, s=3, color=color, rasterized=True)
-    ax.plot([0, 100], [0, 100], 'k--', linewidth=1.0, label='Ideální shoda')
-    z      = np.polyfit(ov['CNN_FearGreed'], ov[col], 1)
-    x_line = np.linspace(0, 100, 100)
-    ax.plot(x_line, np.poly1d(z)(x_line), color=color, linewidth=1.5,
-            label=f"r={results[col]['r']:.3f}")
-    ax.set_xlabel('CNN Fear & Greed')
-    ax.set_ylabel(col)
-    ax.set_title(f'Scatter: {label}')
-    ax.legend(fontsize=8)
-    ax.set_xlim(0, 100); ax.set_ylim(0, 100)
-    ax.grid(True, alpha=0.3)
-
-# Řada 3: MBE podle CNN pásem
-for i, (col, color, label) in enumerate(VARIANTS):
-    ax         = fig.add_subplot(gs[2, i])
+    ax         = fig.add_subplot(gs[1, i])
     mbe_values = zone_mbe(col)
     bars       = ax.bar(zone_labels_short, mbe_values, color=zone_colors, alpha=0.85, edgecolor='white')
+
+    ymin_data  = min(mbe_values)
+    ymax_data  = max(mbe_values)
+    data_range = (ymax_data - ymin_data) if ymax_data != ymin_data else 1.0
+    padding    = data_range * 0.20
+    offset     = data_range * 0.05
+    ax.set_ylim(ymin_data - padding, ymax_data + padding)
+
     for bar, val in zip(bars, mbe_values):
-        ypos = bar.get_height() + 0.15 if val >= 0 else bar.get_height() - 0.8
+        if val >= 0:
+            ypos, va = val + offset, 'bottom'
+        else:
+            ypos, va = val - offset, 'top'
         ax.text(bar.get_x() + bar.get_width() / 2, ypos,
-                f'{val:+.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
+                f'{val:.1f}', ha='center', va=va, fontsize=8, fontweight='bold')
     ax.axhline(0, color='black', linewidth=1.0)
     ax.set_ylabel('MBE (body)')
     ax.set_title(f'MBE podle CNN pásma: {label}')
     ax.tick_params(axis='x', labelsize=7)
     ax.grid(axis='y', alpha=0.3)
 
-# Řada 4: Souhrnná tabulka metrik
+# Řada 3: Souhrnná tabulka metrik
 for i, (col, color, label) in enumerate(VARIANTS):
-    ax = fig.add_subplot(gs[3, i])
+    ax = fig.add_subplot(gs[2, i])
     ax.axis('off')
     s  = results[col]
     ov = get_overlap(col)

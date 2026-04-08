@@ -1,10 +1,10 @@
 """
 Out-of-sample validace — testování best IS parametrů na OOS datech.
 
-Načte grid_results.csv, vybere TOP 1 per (strategie × fgi_col) podle IS
+Načte grid_results.csv, vybere TOP 3 per (strategie × fgi_col) podle IS
 total_return a spustí backtest na OOS datech (2016–2026).
 
-Speciální případ ma_combined: rolling MA se počítá z celého datasetu
+Speciální případ ma_combined a ma_long: rolling MA se počítá z celého datasetu
 (IS+OOS dohromady), aby slow MA měla plný warmup na začátku OOS periody.
 Trading ale začíná až od OOS_START.
 
@@ -30,15 +30,15 @@ from backtester import STRATEGIES, compute_metrics
 
 def load_best_params(grid_path: Path) -> pd.DataFrame:
     """
-    Načte grid_results.csv a vrátí TOP 1 per (strategy × fgi_col)
+    Načte grid_results.csv a vrátí TOP 3 per (strategy × fgi_col)
     podle IS total_return.
     """
     df = pd.read_csv(grid_path)
     best = (
         df.sort_values('total_return', ascending=False)
         .groupby(['strategy', 'fgi_col'], sort=False)
-        .first()
-        .reset_index()
+        .head(3)
+        .reset_index(drop=True)
     )
     return best
 
@@ -74,6 +74,16 @@ def run_oos(
         ma_slow_oos   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_start_idx:]
 
         eq, trades = _ma_combined_oos(prices_oos, ma_fast_oos, ma_slow_oos)
+    elif strategy == 'ma_long':
+        fast = int(row['fast'])
+        slow = int(row['slow'])
+
+        fg_full       = df_full[fgi_col].to_numpy(dtype=float)
+        oos_start_idx = df_full.index.get_loc(df_oos.index[0])
+        ma_fast_oos   = pd.Series(fg_full).rolling(fast, min_periods=fast).mean().to_numpy()[oos_start_idx:]
+        ma_slow_oos   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_start_idx:]
+
+        eq, trades = _ma_long_oos(prices_oos, ma_fast_oos, ma_slow_oos)
     else:
         fg_oos = df_oos[fgi_col].to_numpy(dtype=float)
         params = {'entry': int(row['entry']), 'exit': int(row['exit'])}
@@ -168,6 +178,54 @@ def _ma_combined_oos(
     return equity, trades
 
 
+def _ma_long_oos(
+    prices:  np.ndarray,
+    ma_fast: np.ndarray,
+    ma_slow: np.ndarray,
+) -> tuple[np.ndarray, int]:
+    """
+    ma_long s externě předpočítanými MA.
+    MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
+    Bez short větve — pouze long nebo hotovost.
+    """
+    cash   = float(INITIAL)
+    shares = 0.0
+    trades = 0
+    equity = np.empty(len(prices))
+
+    for i in range(len(prices) - 1):
+
+        if np.isnan(ma_slow[i]):
+            equity[i] = cash
+            continue
+
+        if ma_fast[i] > ma_slow[i]:
+            if shares == 0.0:
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
+
+        elif ma_fast[i] < ma_slow[i]:
+            if shares > 0.0:
+                cash    = shares * prices[i + 1] * (1 - FEE)
+                shares  = 0.0
+                trades += 1
+
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        else:
+            equity[i] = cash
+
+        if equity[i] <= 0.0:
+            equity[i:] = 0.0
+            return equity, trades
+
+    if shares > 0.0:
+        cash = shares * prices[-1] * (1 - FEE)
+    equity[-1] = cash
+    return equity, trades
+
+
 def main() -> None:
     # ---- Načtení dat -------------------------------------------------------
     df_full = pd.read_csv(INPUT, index_col='Date', parse_dates=True)
@@ -223,7 +281,7 @@ def main() -> None:
     SEP  = '=' * 100
     SEP2 = '-' * 100
     print(f'\n{SEP}')
-    print('IS vs OOS — srovnání výkonnosti (TOP 1 per strategie × FGI)')
+    print('IS vs OOS — srovnání výkonnosti (TOP 3 per strategie × FGI)')
     print(SEP)
 
     hdr = (
@@ -235,7 +293,7 @@ def main() -> None:
     print(SEP2)
 
     for _, row in df_out.sort_values(['strategy', 'fgi_col']).iterrows():
-        if row['strategy'] == 'ma_combined':
+        if row['strategy'] in ('ma_combined', 'ma_long'):
             pstr = f"f={int(row['fast'])} s={int(row['slow'])}"
         else:
             pstr = f"entry={int(row['entry'])} exit={int(row['exit'])}"
