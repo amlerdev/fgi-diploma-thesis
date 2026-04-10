@@ -110,10 +110,18 @@ def _ma_combined_oos(
     equity      = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        elif invested > 0.0:
+            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
+        else:
+            equity[i] = cash
+
+        is_last_execution = i == len(prices) - 2
 
         # Warmup — slow MA ještě nemá dostatek dat
         if np.isnan(ma_slow[i]):
-            equity[i] = cash
             continue
 
         if ma_fast[i] > ma_slow[i]:
@@ -125,12 +133,13 @@ def _ma_combined_oos(
                 invested    = 0.0
                 entry_price = 0.0
                 trades     += 1
-                # ...a nakup long
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
+                if not is_last_execution:
+                    # ...a nakup long
+                    shares  = cash * (1 - FEE) / prices[i + 1]
+                    cash    = 0.0
+                    trades += 1
 
-            elif shares == 0.0:
+            elif shares == 0.0 and not is_last_execution:
                 # První vstup do LONG
                 shares  = cash * (1 - FEE) / prices[i + 1]
                 cash    = 0.0
@@ -144,26 +153,19 @@ def _ma_combined_oos(
                 cash    = shares * prices[i + 1] * (1 - FEE)
                 shares  = 0.0
                 trades += 1
-                # ...a otevři short
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
+                if not is_last_execution:
+                    # ...a otevři short
+                    invested    = cash * (1 - FEE)
+                    entry_price = prices[i + 1]
+                    cash        = 0.0
+                    trades     += 1
 
-            elif invested == 0.0:
+            elif invested == 0.0 and not is_last_execution:
                 # První vstup do SHORT
                 invested    = cash * (1 - FEE)
                 entry_price = prices[i + 1]
                 cash        = 0.0
                 trades     += 1
-
-        # Aktuální hodnota portfolia
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
 
         if equity[i] <= 0.0:
             equity[i:] = 0.0
@@ -194,13 +196,18 @@ def _ma_long_oos(
     equity = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        else:
+            equity[i] = cash
+
+        is_last_execution = i == len(prices) - 2
 
         if np.isnan(ma_slow[i]):
-            equity[i] = cash
             continue
 
         if ma_fast[i] > ma_slow[i]:
-            if shares == 0.0:
+            if shares == 0.0 and not is_last_execution:
                 shares  = cash * (1 - FEE) / prices[i + 1]
                 cash    = 0.0
                 trades += 1
@@ -210,11 +217,6 @@ def _ma_long_oos(
                 cash    = shares * prices[i + 1] * (1 - FEE)
                 shares  = 0.0
                 trades += 1
-
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        else:
-            equity[i] = cash
 
         if equity[i] <= 0.0:
             equity[i:] = 0.0

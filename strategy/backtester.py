@@ -99,9 +99,11 @@ def kontrarian_long(
     equity = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        equity[i] = cash + shares * prices[i]
+        is_last_execution = i == len(prices) - 2
 
         # Nakup při extrémním strachu
-        if shares == 0.0 and fg[i] < entry:
+        if shares == 0.0 and fg[i] < entry and not is_last_execution:
             shares  = cash * (1 - FEE) / prices[i + 1]
             cash    = 0.0
             trades += 1
@@ -111,8 +113,6 @@ def kontrarian_long(
             cash    = shares * prices[i + 1] * (1 - FEE)
             shares  = 0.0
             trades += 1
-
-        equity[i] = cash + shares * prices[i]
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
@@ -151,6 +151,15 @@ def kontrarian_combined(
     equity      = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        elif invested > 0.0:
+            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
+        else:
+            equity[i] = cash
+
+        is_last_execution = i == len(prices) - 2
 
         if fg[i] < entry and invested > 0.0:
             # Strach — přepni SHORT → LONG: uzavři short...
@@ -158,23 +167,25 @@ def kontrarian_combined(
             invested    = 0.0
             entry_price = 0.0
             trades     += 1
-            # ...pak nakup long
-            shares  = cash * (1 - FEE) / prices[i + 1]
-            cash    = 0.0
-            trades += 1
+            if not is_last_execution:
+                # ...pak nakup long
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
 
         elif fg[i] > exit and shares > 0.0:
             # Euforie — přepni LONG → SHORT: prodej long...
             cash    = shares * prices[i + 1] * (1 - FEE)
             shares  = 0.0
             trades += 1
-            # ...pak otevři short
-            invested    = cash * (1 - FEE)
-            entry_price = prices[i + 1]
-            cash        = 0.0
-            trades     += 1
+            if not is_last_execution:
+                # ...pak otevři short
+                invested    = cash * (1 - FEE)
+                entry_price = prices[i + 1]
+                cash        = 0.0
+                trades     += 1
 
-        elif shares == 0.0 and invested == 0.0:
+        elif shares == 0.0 and invested == 0.0 and not is_last_execution:
             # Před prvním obchodem jsme v cash — čekáme na první signál (tato větev platí jen jednou)
             if fg[i] < entry:
                 # První vstup: strach → jdi LONG
@@ -188,14 +199,6 @@ def kontrarian_combined(
                 cash        = 0.0
                 trades     += 1
             # else: neutrální — zůstaň v cash a čekej dál
-
-        # Aktuální hodnota portfolia
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
@@ -232,9 +235,11 @@ def trend_long(
     equity = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        equity[i] = cash + shares * prices[i]
+        is_last_execution = i == len(prices) - 2
 
         # Nakup při euforii — trend pokračuje nahoru
-        if shares == 0.0 and fg[i] > entry:
+        if shares == 0.0 and fg[i] > entry and not is_last_execution:
             shares  = cash * (1 - FEE) / prices[i + 1]
             cash    = 0.0
             trades += 1
@@ -244,8 +249,6 @@ def trend_long(
             cash    = shares * prices[i + 1] * (1 - FEE)
             shares  = 0.0
             trades += 1
-
-        equity[i] = cash + shares * prices[i]
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
@@ -284,6 +287,15 @@ def trend_combined(
     equity      = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        elif invested > 0.0:
+            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
+        else:
+            equity[i] = cash
+
+        is_last_execution = i == len(prices) - 2
 
         if fg[i] > entry and invested > 0.0:
             # Euforie — přepni SHORT → LONG: uzavři short...
@@ -291,23 +303,25 @@ def trend_combined(
             invested    = 0.0
             entry_price = 0.0
             trades     += 1
-            # ...pak nakup long
-            shares  = cash * (1 - FEE) / prices[i + 1]
-            cash    = 0.0
-            trades += 1
+            if not is_last_execution:
+                # ...pak nakup long
+                shares  = cash * (1 - FEE) / prices[i + 1]
+                cash    = 0.0
+                trades += 1
 
         elif fg[i] < exit and shares > 0.0:
             # Strach — přepni LONG → SHORT: prodej long...
             cash    = shares * prices[i + 1] * (1 - FEE)
             shares  = 0.0
             trades += 1
-            # ...pak otevři short
-            invested    = cash * (1 - FEE)
-            entry_price = prices[i + 1]
-            cash        = 0.0
-            trades     += 1
+            if not is_last_execution:
+                # ...pak otevři short
+                invested    = cash * (1 - FEE)
+                entry_price = prices[i + 1]
+                cash        = 0.0
+                trades     += 1
 
-        elif shares == 0.0 and invested == 0.0:
+        elif shares == 0.0 and invested == 0.0 and not is_last_execution:
             # Před prvním obchodem jsme v cash — čekáme na první signál (tato větev platí jen jednou)
             if fg[i] > entry:
                 # První vstup: euforie → jdi LONG
@@ -321,14 +335,6 @@ def trend_combined(
                 cash        = 0.0
                 trades     += 1
             # else: neutrální — zůstaň v cash a čekej dál
-
-        # Aktuální hodnota portfolia
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
@@ -370,15 +376,16 @@ def ma_long(
     equity = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        equity[i] = cash + shares * prices[i]
+        is_last_execution = i == len(prices) - 2
 
         # Warmup — slow MA ještě nemá dostatek dat
         if np.isnan(ma_slow[i]):
-            equity[i] = cash
             continue
 
         if ma_fast[i] > ma_slow[i]:
             # Fast MA nad slow MA — sentiment roste, nakup pokud nejsme LONG
-            if shares == 0.0:
+            if shares == 0.0 and not is_last_execution:
                 shares  = cash * (1 - FEE) / prices[i + 1]
                 cash    = 0.0
                 trades += 1
@@ -393,8 +400,6 @@ def ma_long(
             # else: už jsme v cash — nic neděláme
 
         # else: fast MA == slow MA — drž stávající pozici beze změny
-
-        equity[i] = cash + shares * prices[i]
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
@@ -436,10 +441,18 @@ def ma_combined(
     equity      = np.empty(len(prices))
 
     for i in range(len(prices) - 1):
+        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
+        if shares > 0.0:
+            equity[i] = shares * prices[i]
+        elif invested > 0.0:
+            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
+        else:
+            equity[i] = cash
+
+        is_last_execution = i == len(prices) - 2
 
         # Warmup — slow MA ještě nemá dostatek dat
         if np.isnan(ma_slow[i]):
-            equity[i] = cash
             continue
 
         if ma_fast[i] > ma_slow[i]:
@@ -451,12 +464,13 @@ def ma_combined(
                 invested    = 0.0
                 entry_price = 0.0
                 trades     += 1
-                # ...a nakup long
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
+                if not is_last_execution:
+                    # ...a nakup long
+                    shares  = cash * (1 - FEE) / prices[i + 1]
+                    cash    = 0.0
+                    trades += 1
 
-            elif shares == 0.0:
+            elif shares == 0.0 and not is_last_execution:
                 # První vstup do LONG po warmup
                 shares  = cash * (1 - FEE) / prices[i + 1]
                 cash    = 0.0
@@ -472,13 +486,14 @@ def ma_combined(
                 cash    = shares * prices[i + 1] * (1 - FEE)
                 shares  = 0.0
                 trades += 1
-                # ...a otevři short
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
+                if not is_last_execution:
+                    # ...a otevři short
+                    invested    = cash * (1 - FEE)
+                    entry_price = prices[i + 1]
+                    cash        = 0.0
+                    trades     += 1
 
-            elif invested == 0.0:
+            elif invested == 0.0 and not is_last_execution:
                 # První vstup do SHORT po warmup
                 invested    = cash * (1 - FEE)
                 entry_price = prices[i + 1]
@@ -488,14 +503,6 @@ def ma_combined(
             # else: už jsme SHORT — nic neděláme
 
         # else: fast MA == slow MA — drž stávající pozici beze změny
-
-        # Aktuální hodnota portfolia
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
 
         # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
         if equity[i] <= 0.0:
