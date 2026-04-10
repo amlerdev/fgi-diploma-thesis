@@ -42,6 +42,8 @@ def download_quotebrain(symbol, save_path):
     dates  = [pd.to_datetime(i['start']['time']) for i in intervals]
     closes = [i['close'] for i in intervals]
     df = pd.DataFrame({'Date': dates, 'CPC': closes}).sort_values('Date').reset_index(drop=True)
+    # QuoteBrain vrací denní data s časem 09:30:00; pro komponenty držíme čisté datum.
+    df['Date'] = df['Date'].dt.normalize()
     df.to_csv(save_path, index=False)
     print(f"  Stazeno {len(df)} dni  ({df['Date'].min().date()} -> {df['Date'].max().date()})")
     return df
@@ -50,6 +52,12 @@ pc_csv = _dir / 'put_call_ratio_1995_2026.csv'
 
 if pc_csv.exists():
     pc_df = pd.read_csv(pc_csv, parse_dates=['Date'])
+    normalized_dates = pd.to_datetime(pc_df['Date']).dt.normalize()
+    if not normalized_dates.equals(pc_df['Date']):
+        pc_df['Date'] = normalized_dates
+        pc_df.to_csv(pc_csv, index=False)
+    else:
+        pc_df['Date'] = normalized_dates
     print(f"Nacteno z CSV: {len(pc_df)} zaznamu")
 else:
     print("Stahuji $CPC z StockCharts QuoteBrain API...")
@@ -84,6 +92,7 @@ pc_norm = rolling_zscore(raw_signal, BEST_WINDOW, inverse=True)
 pc_norm.name = 'PutCall_Norm'
 
 out = pc_norm.dropna().reset_index()
+out['Date'] = pd.to_datetime(out['Date']).dt.normalize()
 out.columns = ['Date', 'PutCall_Norm']
 output_file = _dir / 'put_call_ratio_normalized.csv'
 out.to_csv(output_file, index=False)
