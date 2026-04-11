@@ -18,22 +18,30 @@ Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import yfinance as yf
 from scipy.stats import pearsonr
 import warnings
-from vix_data import END_DATE, load_vix_series
 warnings.filterwarnings('ignore')
 
 _dir = Path(__file__).resolve().parent
 CNN_CSV = _dir / '../../data/fear_greed_historical.csv'
+START_DATE = '1990-01-01'
+END_DATE = '2026-03-20'
 
 WINDOWS = [21, 42, 63, 126, 252, 378, 504, 630, 756, 1008, 1260, 1512]
 MA_WINDOWS = [20, 50, 125, 252]
 
 # ── Data ──────────────────────────────────────────────────────────────────────
-vix_csv = _dir / 'vix_daily_data.csv'
-vix = load_vix_series(vix_csv, refresh=False)
-print(f"Nacteno z CSV: {len(vix)} dni  ({vix.index[0].date()} → {vix.index[-1].date()})")
-print(f"Zdroj raw dat: {vix_csv}  (do {END_DATE})")
+print("Stahuji VIX (^VIX) z Yahoo Finance...")
+vix_dl = yf.download('^VIX', start=START_DATE, end=END_DATE, progress=False)
+if vix_dl is None or vix_dl.empty:
+    raise ValueError("Yahoo Finance nevrátil žádná VIX data.")
+
+vix_close = vix_dl['Close']
+vix = vix_close.iloc[:, 0] if isinstance(vix_close, pd.DataFrame) else vix_close
+vix.index = pd.to_datetime(vix.index).normalize()
+vix = vix.astype(float).dropna().sort_index()
+print(f"^VIX: {len(vix)} dni  ({vix.index[0].date()} → {vix.index[-1].date()})")
 
 # ── CNN FGI ───────────────────────────────────────────────────────────────────
 cnn = pd.read_csv(CNN_CSV, parse_dates=['date'], index_col='date')['value']
@@ -121,7 +129,7 @@ for fname, raw in formulas.items():
 
 # ── Výsledek ──────────────────────────────────────────────────────────────────
 results.sort(key=lambda x: x['r'], reverse=True)
-print(f"\n  Původní verze (VIX/MA50, Z-score 1512d): r=0.644")
+print(f"\n  Původní verze (VIX/MA50, Z-score 1512d): r=0.646")
 
 if results:
     best = results[0]

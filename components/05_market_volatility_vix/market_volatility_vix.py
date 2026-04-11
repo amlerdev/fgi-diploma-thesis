@@ -4,7 +4,7 @@ market_volatility_vix.py
 Component #5: Market Volatility (VIX)
 Indicator: VIX / MA50 ratio, INVERSE normalization
 Normalization: Rolling Z-score (inverse), window=1512d (~6 years)
-Correlation with CNN FGI: r=0.653 (2011-2026, n=3826)
+Correlation with CNN FGI: r=0.646 (2011-2026, n=3825)
 Data source: Yahoo Finance (^VIX) — FREE
 
 Grid search: viz market_volatility_vix_grid.py
@@ -12,19 +12,25 @@ Grid search: viz market_volatility_vix_grid.py
 
 from pathlib import Path
 import pandas as pd
-
-from vix_data import END_DATE, load_vix_series
+import yfinance as yf
 
 _dir = Path(__file__).resolve().parent
-BEST_WINDOW = 1512  # ~6 let — nejlepší korelace r=0.653; VIX spiky potřebují dlouhý kontext
-VIX_CSV = _dir / 'vix_daily_data.csv'
+START_DATE = '1990-01-01'
+END_DATE = '2026-03-20'
+BEST_WINDOW = 1512  # ~6 let — produkční verze VIX/MA50 dává r=0.646
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
-print(f"Stahuji VIX (^VIX) z Yahoo Finance a aktualizuji {VIX_CSV.name}...")
-vix_raw = load_vix_series(VIX_CSV, refresh=True)
+print("Stahuji VIX (^VIX) z Yahoo Finance...")
+vix_dl = yf.download('^VIX', start=START_DATE, end=END_DATE, progress=False)
+if vix_dl is None or vix_dl.empty:
+    raise ValueError("Yahoo Finance nevrátil žádná VIX data.")
+
+vix_close = vix_dl['Close']
+vix_raw = vix_close.iloc[:, 0] if isinstance(vix_close, pd.DataFrame) else vix_close
+vix_raw.index = pd.to_datetime(vix_raw.index).normalize()
+vix_raw = vix_raw.astype(float).dropna().sort_index()
 
 print(f"^VIX: {vix_raw.index[0].date()} → {vix_raw.index[-1].date()}  ({len(vix_raw)} dní)")
-print(f"Raw CSV: {VIX_CSV}  (do {END_DATE})")
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
 vix_ma50   = vix_raw.rolling(50).mean()
