@@ -18,9 +18,9 @@ Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 from pathlib import Path
 import pandas as pd
 import numpy as np
-import yfinance as yf
 from scipy.stats import pearsonr
 import warnings
+from vix_data import END_DATE, load_vix_series
 warnings.filterwarnings('ignore')
 
 _dir = Path(__file__).resolve().parent
@@ -31,24 +31,9 @@ MA_WINDOWS = [20, 50, 125, 252]
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 vix_csv = _dir / 'vix_daily_data.csv'
-
-if vix_csv.exists():
-    try:
-        vix_df = pd.read_csv(vix_csv, skiprows=2)
-        vix_df.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-        vix_df['Date'] = pd.to_datetime(vix_df['Date'])
-        vix = vix_df.set_index('Date')['Close'].astype(float).dropna()
-    except Exception:
-        vix_df = pd.read_csv(vix_csv, parse_dates=['Date'], index_col='Date')
-        vix = vix_df.iloc[:, 0].astype(float).dropna()
-    print(f"Nacteno z CSV: {len(vix)} dni  ({vix.index[0].date()} → {vix.index[-1].date()})")
-else:
-    print("Stahuji VIX (^VIX) z Yahoo Finance...")
-    raw = yf.download('^VIX', start='1990-01-01', end='2026-03-20', progress=False)
-    vix = raw['Close'].iloc[:, 0] if isinstance(raw['Close'], pd.DataFrame) else raw['Close']
-    vix.index = pd.to_datetime(vix.index)
-    raw.to_csv(vix_csv)
-    print(f"  Ulozeno {len(vix)} dni")
+vix = load_vix_series(vix_csv, refresh=False)
+print(f"Nacteno z CSV: {len(vix)} dni  ({vix.index[0].date()} → {vix.index[-1].date()})")
+print(f"Zdroj raw dat: {vix_csv}  (do {END_DATE})")
 
 # ── CNN FGI ───────────────────────────────────────────────────────────────────
 cnn = pd.read_csv(CNN_CSV, parse_dates=['date'], index_col='date')['value']

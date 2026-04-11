@@ -12,18 +12,19 @@ Grid search: viz market_volatility_vix_grid.py
 
 from pathlib import Path
 import pandas as pd
-import yfinance as yf
+
+from vix_data import END_DATE, load_vix_series
 
 _dir = Path(__file__).resolve().parent
 BEST_WINDOW = 1512  # ~6 let — nejlepší korelace r=0.653; VIX spiky potřebují dlouhý kontext
+VIX_CSV = _dir / 'vix_daily_data.csv'
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
-print("Stahuji VIX (^VIX) z Yahoo Finance...")
-vix_dl  = yf.download('^VIX', start='1990-01-01', end='2026-03-20', progress=False)
-vix_raw = vix_dl['Close'].iloc[:, 0] if isinstance(vix_dl['Close'], pd.DataFrame) else vix_dl['Close']
-vix_raw.index = pd.to_datetime(vix_raw.index)
+print(f"Stahuji VIX (^VIX) z Yahoo Finance a aktualizuji {VIX_CSV.name}...")
+vix_raw = load_vix_series(VIX_CSV, refresh=True)
 
 print(f"^VIX: {vix_raw.index[0].date()} → {vix_raw.index[-1].date()}  ({len(vix_raw)} dní)")
+print(f"Raw CSV: {VIX_CSV}  (do {END_DATE})")
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
 vix_ma50   = vix_raw.rolling(50).mean()
