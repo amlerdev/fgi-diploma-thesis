@@ -13,8 +13,6 @@ Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 from pathlib import Path
 import pandas as pd
 import yfinance as yf
-import warnings
-warnings.filterwarnings('ignore')
 
 try:
     import pandas_datareader.data as web

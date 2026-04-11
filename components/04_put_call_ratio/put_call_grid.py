@@ -17,8 +17,6 @@ import requests
 import pandas as pd
 from datetime import datetime
 from scipy.stats import pearsonr
-import warnings
-warnings.filterwarnings('ignore')
 
 _dir = Path(__file__).resolve().parent
 CNN_CSV = _dir / '../../data/fear_greed_historical.csv'

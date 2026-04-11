@@ -17,11 +17,15 @@ import numpy as np
 import yfinance as yf
 
 _dir = Path(__file__).resolve().parent
+START_DATE = '1995-01-01'
+END_DATE = '2026-03-20'
+# yfinance bere `end` exkluzivně, proto přidáváme jeden den.
+YF_END_DATE = (pd.Timestamp(END_DATE) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 BEST_WINDOW = 63   # ~3 měsíce
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji S&P 500 (^GSPC) od 1995...")
-sp500_raw = yf.download('^GSPC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
+sp500_raw = yf.download('^GSPC', start=START_DATE, end=YF_END_DATE, progress=False)['Close']
 sp500_raw.index = pd.to_datetime(sp500_raw.index)
 sp500 = sp500_raw.iloc[:, 0] if isinstance(sp500_raw, pd.DataFrame) else sp500_raw
 

@@ -20,20 +20,20 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from scipy.stats import pearsonr
-import warnings
-warnings.filterwarnings('ignore')
 
 _dir = Path(__file__).resolve().parent
 CNN_CSV = _dir / '../../data/fear_greed_historical.csv'
 START_DATE = '1990-01-01'
 END_DATE = '2026-03-20'
+# yfinance bere `end` exkluzivně, proto přidáváme jeden den.
+YF_END_DATE = (pd.Timestamp(END_DATE) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 
 WINDOWS = [21, 42, 63, 126, 252, 378, 504, 630, 756, 1008, 1260, 1512]
 MA_WINDOWS = [20, 50, 125, 252]
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 print("Stahuji VIX (^VIX) z Yahoo Finance...")
-vix_dl = yf.download('^VIX', start=START_DATE, end=END_DATE, progress=False)
+vix_dl = yf.download('^VIX', start=START_DATE, end=YF_END_DATE, progress=False)
 if vix_dl is None or vix_dl.empty:
     raise ValueError("Yahoo Finance nevrátil žádná VIX data.")
 

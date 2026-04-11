@@ -12,11 +12,13 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 from scipy.stats import pearsonr
-import warnings
-warnings.filterwarnings('ignore')
 
 _dir = Path(__file__).resolve().parent
 CNN_CSV = _dir / '../../data/fear_greed_historical.csv'
+START_DATE = '1997-01-01'
+END_DATE = '2026-03-20'
+# yfinance bere `end` exkluzivně, proto přidáváme jeden den.
+YF_END_DATE = (pd.Timestamp(END_DATE) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 
 # ── Konfigurace: co testovat ─────────────────────────────────────────────────
 
@@ -44,7 +46,7 @@ print("Stahuji data...")
 stock_data = {}
 for ticker, name in STOCK_INDICES.items():
     try:
-        raw = yf.download(ticker, start='1997-01-01', end='2026-03-20', progress=False)['Close']
+        raw = yf.download(ticker, start=START_DATE, end=YF_END_DATE, progress=False)['Close']
         raw.index = pd.to_datetime(raw.index)
         s = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
         s = s.dropna()
@@ -57,7 +59,7 @@ print()
 bond_data = {}
 for ticker, name in BOND_INSTRUMENTS.items():
     try:
-        raw = yf.download(ticker, start='1997-01-01', end='2026-03-20', progress=False)['Close']
+        raw = yf.download(ticker, start=START_DATE, end=YF_END_DATE, progress=False)['Close']
         raw.index = pd.to_datetime(raw.index)
         b = raw.iloc[:, 0] if isinstance(raw, pd.DataFrame) else raw
         b = b.dropna()

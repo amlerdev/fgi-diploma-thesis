@@ -25,16 +25,20 @@ import numpy as np
 import yfinance as yf
 
 _dir = Path(__file__).resolve().parent
+START_DATE = '1995-01-01'
+END_DATE = '2026-03-20'
+# yfinance bere `end` exkluzivně, proto přidáváme jeden den.
+YF_END_DATE = (pd.Timestamp(END_DATE) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 BEST_WINDOW = 504  # ~2 roky — nejlepší korelace r=0.730 (zscore)
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji ^IXIC (NASDAQ Composite)...")
-ixic_raw = yf.download('^IXIC', start='1995-01-01', end='2026-03-20', progress=False)['Close']
+ixic_raw = yf.download('^IXIC', start=START_DATE, end=YF_END_DATE, progress=False)['Close']
 ixic_raw.index = pd.to_datetime(ixic_raw.index)
 ixic = ixic_raw.iloc[:, 0] if isinstance(ixic_raw, pd.DataFrame) else ixic_raw
 
 print("Stahuji VFITX (Vanguard Intermediate-Term Treasury, 5-10yr)...")
-vustx_raw = yf.download('VFITX', start='1995-01-01', end='2026-03-20', progress=False)['Close']
+vustx_raw = yf.download('VFITX', start=START_DATE, end=YF_END_DATE, progress=False)['Close']
 vustx_raw.index = pd.to_datetime(vustx_raw.index)
 vustx = vustx_raw.iloc[:, 0] if isinstance(vustx_raw, pd.DataFrame) else vustx_raw
 

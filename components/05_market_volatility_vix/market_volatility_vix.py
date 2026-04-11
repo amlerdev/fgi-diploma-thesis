@@ -4,7 +4,7 @@ market_volatility_vix.py
 Component #5: Market Volatility (VIX)
 Indicator: VIX / MA50 ratio, INVERSE normalization
 Normalization: Rolling Z-score (inverse), window=1512d (~6 years)
-Correlation with CNN FGI: r=0.646 (2011-2026, n=3825)
+Correlation with CNN FGI: r=0.646 (2011-2026, n=3826)
 Data source: Yahoo Finance (^VIX) — FREE
 
 Grid search: viz market_volatility_vix_grid.py
@@ -17,11 +17,13 @@ import yfinance as yf
 _dir = Path(__file__).resolve().parent
 START_DATE = '1990-01-01'
 END_DATE = '2026-03-20'
+# yfinance bere `end` exkluzivně, proto přidáváme jeden den.
+YF_END_DATE = (pd.Timestamp(END_DATE) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 BEST_WINDOW = 1512  # ~6 let — produkční verze VIX/MA50 dává r=0.646
 
 # ── ČÁST 1: Download dat ──────────────────────────────────────────────────────
 print("Stahuji VIX (^VIX) z Yahoo Finance...")
-vix_dl = yf.download('^VIX', start=START_DATE, end=END_DATE, progress=False)
+vix_dl = yf.download('^VIX', start=START_DATE, end=YF_END_DATE, progress=False)
 if vix_dl is None or vix_dl.empty:
     raise ValueError("Yahoo Finance nevrátil žádná VIX data.")
 
