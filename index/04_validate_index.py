@@ -48,9 +48,12 @@ def compute_stats(actual, predicted):
     err     = predicted - actual
     abs_err = err.abs()
     r, _    = pearsonr(actual, predicted)
+    sse     = np.square(err).sum()
+    sst     = np.square(actual - actual.mean()).sum()
+    r2      = np.nan if np.isclose(sst, 0.0) else 1 - (sse / sst)
     return {
         'r':    r,
-        'r2':   r ** 2,
+        'r2':   r2,
         'mae':  abs_err.mean(),
         'mbe':  err.mean(),
         'p90':  abs_err.quantile(0.90),

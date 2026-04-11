@@ -22,7 +22,8 @@ INDEX_DIR = Path(__file__).resolve().parent
 OUTPUT    = INDEX_DIR / 'fgi_dataset.csv'
 
 START_DATE = '1998-01-01'
-END_DATE   = '2026-03-20'
+# yfinance interpretuje `end` jako exkluzivní hranici.
+END_DATE   = '2026-03-21'
 
 COMPONENTS = [
     ('01_market_momentum',       'market_momentum_normalized.csv',       'Mom_Norm'),
