@@ -64,16 +64,14 @@ else:
     pc_df = download_quotebrain('$CPC', pc_csv)
 
 # ── ČÁST 2: Výpočet surového signálu ─────────────────────────────────────────
-if 'PC_Ratio_5D' in pc_df.columns:
-    pc_df = pc_df.set_index('Date')[['PC_Ratio_5D']].dropna()
-    raw_signal = pc_df['PC_Ratio_5D']
-elif 'CPC' in pc_df.columns:
-    pc_df = pc_df.set_index('Date')
-    raw_signal = pc_df['CPC'].rolling(5).mean().dropna()
-    pc_df['PC_Ratio_5D'] = raw_signal
-    pc_df.reset_index().to_csv(pc_csv, index=False)
-else:
+# Zdroj pravdy je vždy CPC; 5denní MA dopočítáme při každém běhu znovu.
+if 'CPC' not in pc_df.columns:
     raise ValueError(f"Neocekavane sloupce v {pc_csv}: {pc_df.columns.tolist()}")
+
+pc_df = pc_df.set_index('Date').sort_index()
+raw_signal = pc_df['CPC'].rolling(5).mean()
+pc_df['PC_Ratio_5D'] = raw_signal
+pc_df.reset_index().to_csv(pc_csv, index=False)
 
 raw_signal = raw_signal.dropna()
 print(f"$CPC: {raw_signal.index[0].date()} → {raw_signal.index[-1].date()}  ({len(raw_signal)} dní)")
