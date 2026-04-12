@@ -7,6 +7,9 @@ Načte oos_results.csv a vygeneruje:
   3. Graf celého období 1998–2026 s IS/OOS dělítkem
 
 B&H benchmark je konzistentně počítán přes compute_metrics.
+Všechny strategie jsou rekonstruovány přes stejný position-based execution model.
+Short expozice je zjednodušená syntetická -1x denní návratnost bez borrow
+a financing cost.
 """
 
 from __future__ import annotations
@@ -25,7 +28,12 @@ from config import (
     FGI_COLS, INITIAL, INPUT,
     IS_END, IS_START, OOS_END, OOS_START, STRATEGY_DIR,
 )
-from backtester import STRATEGIES, FEE, compute_metrics
+from backtester import (
+    STRATEGIES,
+    _ma_combined_from_arrays,
+    _ma_long_from_arrays,
+    compute_metrics,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +75,8 @@ def _build_equity_ma_oos(
     """
     Rekonstruuje equity křivku pro ma_combined na OOS datech.
     MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
+    Short expozice je modelována stejně jako v backtesteru:
+    zjednodušená syntetická -1x denní návratnost bez borrow a financing cost.
     """
     fgi_col = row['fgi_col']
     fast    = int(row['fast'])
@@ -78,74 +88,7 @@ def _build_equity_ma_oos(
     ma_slow   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_idx:]
     prices    = df_oos['SP500_Close'].to_numpy(dtype=float)
 
-    cash        = float(INITIAL)
-    shares      = 0.0    # počet akcií v long pozici
-    invested    = 0.0    # investovaná částka v short pozici
-    entry_price = 0.0    # vstupní cena short pozice
-    equity      = np.empty(len(prices))
-
-    for i in range(len(prices) - 1):
-        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
-
-        is_last_execution = i == len(prices) - 2
-
-        # Warmup — slow MA ještě nemá dostatek dat
-        if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            # Fast MA nad slow MA — sentiment roste, chceme být LONG
-
-            if invested > 0.0:
-                # Přechod SHORT → LONG: uzavři short...
-                cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
-                invested    = 0.0
-                entry_price = 0.0
-                # ...a nakup long
-                if not is_last_execution:
-                    shares = cash * (1 - FEE) / prices[i + 1]
-                    cash   = 0.0
-
-            elif shares == 0.0 and not is_last_execution:
-                # První vstup do LONG
-                shares = cash * (1 - FEE) / prices[i + 1]
-                cash   = 0.0
-
-        elif ma_fast[i] < ma_slow[i]:
-            # Fast MA pod slow MA — sentiment klesá, chceme být SHORT
-
-            if shares > 0.0:
-                # Přechod LONG → SHORT: prodej long...
-                cash   = shares * prices[i + 1] * (1 - FEE)
-                shares = 0.0
-                # ...a otevři short
-                if not is_last_execution:
-                    invested    = cash * (1 - FEE)
-                    entry_price = prices[i + 1]
-                    cash        = 0.0
-
-            elif invested == 0.0 and not is_last_execution:
-                # První vstup do SHORT
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
-            return equity
-
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    elif invested > 0.0:
-        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
-    equity[-1] = cash
+    equity, _ = _ma_combined_from_arrays(prices, ma_fast, ma_slow)
     return equity
 
 
@@ -157,7 +100,8 @@ def _build_equity_ma_long_oos(
     """
     Rekonstruuje equity křivku pro ma_long na OOS datech.
     MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
-    Bez short větve — pouze long nebo hotovost.
+    Logika je identická s backtester.ma_long ve stejném unified
+    position-based execution frameworku.
     """
     fgi_col = row['fgi_col']
     fast    = int(row['fast'])
@@ -169,38 +113,7 @@ def _build_equity_ma_long_oos(
     ma_slow = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_idx:]
     prices  = df_oos['SP500_Close'].to_numpy(dtype=float)
 
-    cash   = float(INITIAL)
-    shares = 0.0
-    equity = np.empty(len(prices))
-
-    for i in range(len(prices) - 1):
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        else:
-            equity[i] = cash
-
-        is_last_execution = i == len(prices) - 2
-
-        if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            if shares == 0.0 and not is_last_execution:
-                shares = cash * (1 - FEE) / prices[i + 1]
-                cash   = 0.0
-
-        elif ma_fast[i] < ma_slow[i]:
-            if shares > 0.0:
-                cash   = shares * prices[i + 1] * (1 - FEE)
-                shares = 0.0
-
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
-            return equity
-
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
+    equity, _ = _ma_long_from_arrays(prices, ma_fast, ma_slow)
     return equity
 
 

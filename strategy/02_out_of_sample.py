@@ -9,6 +9,10 @@ Speciální případ ma_combined a ma_long: rolling MA se počítá z celého da
 Trading ale začíná až od OOS_START.
 
 Výstup: oos_results.csv s prefixovanými sloupci is_* a oos_*.
+
+Všechny strategie používají stejný position-based execution model.
+Short expozice je zjednodušená syntetická -1x denní návratnost bez borrow
+a financing cost.
 """
 
 from __future__ import annotations
@@ -22,10 +26,15 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import (
-    FEE, FGI_COLS, INITIAL, INPUT,
+    FGI_COLS, INITIAL, INPUT,
     IS_END, IS_START, OOS_END, OOS_START, STRATEGY_DIR,
 )
-from backtester import STRATEGIES, compute_metrics
+from backtester import (
+    STRATEGIES,
+    _ma_combined_from_arrays,
+    _ma_long_from_arrays,
+    compute_metrics,
+)
 
 
 def load_best_params(grid_path: Path) -> pd.DataFrame:
@@ -100,84 +109,10 @@ def _ma_combined_oos(
     """
     ma_combined s externě předpočítanými MA.
     MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
-    Logika identická s backtester.ma_combined.
+    Logika je identická s backtester.ma_combined včetně zjednodušené
+    syntetické short expozice (-1x denní výnos bez borrow a financing cost).
     """
-    cash        = float(INITIAL)
-    shares      = 0.0    # počet akcií v long pozici
-    invested    = 0.0    # investovaná částka v short pozici
-    entry_price = 0.0    # vstupní cena short pozice
-    trades      = 0
-    equity      = np.empty(len(prices))
-
-    for i in range(len(prices) - 1):
-        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
-
-        is_last_execution = i == len(prices) - 2
-
-        # Warmup — slow MA ještě nemá dostatek dat
-        if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            # Fast MA nad slow MA — sentiment roste, chceme být LONG
-
-            if invested > 0.0:
-                # Přechod SHORT → LONG: uzavři short...
-                cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
-                invested    = 0.0
-                entry_price = 0.0
-                trades     += 1
-                if not is_last_execution:
-                    # ...a nakup long
-                    shares  = cash * (1 - FEE) / prices[i + 1]
-                    cash    = 0.0
-                    trades += 1
-
-            elif shares == 0.0 and not is_last_execution:
-                # První vstup do LONG
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-
-        elif ma_fast[i] < ma_slow[i]:
-            # Fast MA pod slow MA — sentiment klesá, chceme být SHORT
-
-            if shares > 0.0:
-                # Přechod LONG → SHORT: prodej long...
-                cash    = shares * prices[i + 1] * (1 - FEE)
-                shares  = 0.0
-                trades += 1
-                if not is_last_execution:
-                    # ...a otevři short
-                    invested    = cash * (1 - FEE)
-                    entry_price = prices[i + 1]
-                    cash        = 0.0
-                    trades     += 1
-
-            elif invested == 0.0 and not is_last_execution:
-                # První vstup do SHORT
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
-
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
-            return equity, trades
-
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    elif invested > 0.0:
-        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
+    return _ma_combined_from_arrays(prices, ma_fast, ma_slow)
 
 
 def _ma_long_oos(
@@ -188,44 +123,10 @@ def _ma_long_oos(
     """
     ma_long s externě předpočítanými MA.
     MA jsou spočítány z celého IS+OOS datasetu — správný warmup na začátku OOS.
-    Bez short větve — pouze long nebo hotovost.
+    Logika je identická s backtester.ma_long ve stejném unified
+    position-based execution frameworku.
     """
-    cash   = float(INITIAL)
-    shares = 0.0
-    trades = 0
-    equity = np.empty(len(prices))
-
-    for i in range(len(prices) - 1):
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        else:
-            equity[i] = cash
-
-        is_last_execution = i == len(prices) - 2
-
-        if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            if shares == 0.0 and not is_last_execution:
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-
-        elif ma_fast[i] < ma_slow[i]:
-            if shares > 0.0:
-                cash    = shares * prices[i + 1] * (1 - FEE)
-                shares  = 0.0
-                trades += 1
-
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
-            return equity, trades
-
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
+    return _ma_long_from_arrays(prices, ma_fast, ma_slow)
 
 
 def main() -> None:
@@ -249,7 +150,7 @@ def main() -> None:
         )
     best = load_best_params(grid_path)
     print(f'Načteno {len(best)} best konfigurací z {grid_path.name}')
-    print(f'OOS perioda: {OOS_START} → {OOS_END}  ({len(df_oos)} barů)\n')
+    print(f'OOS perioda: {OOS_START} → {OOS_END}  ({len(df_oos)} dnů)\n')
 
     # ---- OOS backtest pro každou konfiguraci ------------------------------
     records = []

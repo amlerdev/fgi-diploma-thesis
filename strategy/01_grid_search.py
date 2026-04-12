@@ -159,7 +159,7 @@ def main() -> None:
                     n_ma += 1
     n_ma *= 2   # dvě MA strategie: ma_combined + ma_long
 
-    print(f'Grid search — IS: {IS_START} → {IS_END}  ({len(df_is)} barů)')
+    print(f'Grid search — IS: {IS_START} → {IS_END}  ({len(df_is)} dnů)')
     print(f'  Kontr. tasků      : {n_kontr:>6d}'
           f'  (2 FGI × 2 strat × {len(ENTRY_KONTR_RANGE)} × {len(EXIT_KONTR_RANGE)})')
     print(f'  Trend. tasků      : {n_trend:>6d}'

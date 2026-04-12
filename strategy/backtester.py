@@ -1,13 +1,18 @@
 """
 Backtestovací engine pro FGI Backtesting System v2.
 
-Každá strategie je samostatná a čitelná bez znalosti zbytku kódu.
-Short pozice modelovány jako inverzní ETF:
-  equity[i] = invested * (entry_price / prices[i])
+Každá strategie je zapsaná co nejčitelněji, skoro jako pseudokód.
+Všechny strategie používají stejný jednoduchý position-based execution model:
+  LONG  -> equity_next = equity_current * (1 + r)
+  SHORT -> equity_next = equity_current * (1 - r)
+  CASH  -> equity_next = equity_current
+
+Short expozice je zjednodušená syntetická -1x denní návratnost.
+Model záměrně neobsahuje borrow cost, financing cost ani další realistické vrstvy.
 
 Parametry strategií:
-  kontrarian: entry = práh strachu (1–49), exit = práh chamtivosti (50–100)
-  trend:      entry = práh chamtivosti (50–100), exit = práh strachu (1–49)
+  kontrarian: entry = práh strachu (1-49), exit = práh chamtivosti (50-100)
+  trend:      entry = práh chamtivosti (50-100), exit = práh strachu (1-49)
   ma:         fast, slow = délky klouzavých průměrů sentimentu
 """
 
@@ -19,8 +24,13 @@ import pandas as pd
 from config import FEE, INITIAL
 
 
+LONG = 1
+CASH = 0
+SHORT = -1
+
+
 # ---------------------------------------------------------------------------
-# Výkonnostní metriky — beze změny
+# Výkonnostní metriky
 # ---------------------------------------------------------------------------
 
 def compute_metrics(equity: np.ndarray, trades: int) -> dict:
@@ -30,39 +40,34 @@ def compute_metrics(equity: np.ndarray, trades: int) -> dict:
     Parametry
     ---------
     equity : np.ndarray
-        Denní hodnota portfolia (délka = počet obchodních dní).
+        Denní hodnota portfolia.
     trades : int
-        Celkový počet uzavřených obchodů.
+        Celkový počet fee jednotek při změnách pozice.
 
     Vrací
     -----
     dict s klíči: total_return, cagr, sharpe, max_dd, calmar, trades
     """
-    n         = len(equity)
+    n = len(equity)
     start_val = equity[0]
-    end_val   = equity[-1]
+    end_val = equity[-1]
 
-    # Celkový výnos v %
     total_return = (end_val / start_val - 1.0) * 100.0
 
-    # CAGR v %
-    years = n / 252.0  # 252 trading days per year
-    cagr  = ((end_val / start_val) ** (1.0 / years) - 1.0) * 100.0
+    years = n / 252.0
+    cagr = ((end_val / start_val) ** (1.0 / years) - 1.0) * 100.0
 
-    # Sharpe ratio (annualizovaný, rf = 0) — ignoruje NaN (equity == 0 bary)
     daily_r = np.diff(equity) / equity[:-1]
-    std_r   = np.nanstd(daily_r)
+    std_r = np.nanstd(daily_r)
     if std_r == 0.0 or np.isnan(std_r):
         sharpe = 0.0
     else:
         sharpe = (np.nanmean(daily_r) / std_r) * np.sqrt(252.0)
 
-    # Maximum drawdown v % (záporné číslo)
     cummax = np.maximum.accumulate(equity)
-    dd     = (equity - cummax) / cummax * 100.0
+    dd = (equity - cummax) / cummax * 100.0
     max_dd = float(dd.min())
 
-    # Calmar ratio
     if max_dd == 0.0:
         calmar = 0.0
     else:
@@ -79,7 +84,7 @@ def compute_metrics(equity: np.ndarray, trades: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Strategie 1 — kontrarian_long
+# Strategie 1 - kontrarian_long
 # ---------------------------------------------------------------------------
 
 def kontrarian_long(
@@ -91,43 +96,91 @@ def kontrarian_long(
     """
     Kontrariánská long strategie.
     Nakupuje při strachu (FGI < entry), prodává při euforii (FGI > exit).
+
     Podmínka: entry < exit.
     """
-    cash   = float(INITIAL)
-    shares = 0.0
+    position = CASH
     trades = 0
     equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
 
     for i in range(len(prices) - 1):
-        equity[i] = cash + shares * prices[i]
         is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
 
-        # Nakup při extrémním strachu
-        if shares == 0.0 and fg[i] < entry and not is_last_execution:
-            shares  = cash * (1 - FEE) / prices[i + 1]
-            cash    = 0.0
-            trades += 1
+        # 1) Nejdřív spočítáme hodnotu portfolia pro další den podle pozice,
+        #    kterou jsme drželi od dne i do dne i+1.
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
 
-        # Prodej při extrémní euforii
-        elif shares > 0.0 and fg[i] > exit:
-            cash    = shares * prices[i + 1] * (1 - FEE)
-            shares  = 0.0
-            trades += 1
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
 
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
+        # 2) Dnešní signál říká, co chceme držet od dalšího dne.
+        desired_position = position
+        if fg[i] < entry:
+            desired_position = LONG
+        elif fg[i] > exit:
+            desired_position = CASH
+
+        # 3) V posledním dni smyčky už novou pozici neotvíráme.
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
+
+        # 4) Fee platíme jen při změně pozice.
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
+
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        trades += fee_units
+        position = next_position
+
+        # 5) Pokud equity spadne na nulu, backtest ukončíme.
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
             return equity, trades
 
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
+    # 6) Pokud jsme na konci stále v pozici, zavřeme ji za 1 fee.
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
     return equity, trades
 
 
 # ---------------------------------------------------------------------------
-# Strategie 2 — kontrarian_combined
+# Strategie 2 - kontrarian_combined
 # ---------------------------------------------------------------------------
 
 def kontrarian_combined(
@@ -137,85 +190,91 @@ def kontrarian_combined(
     exit:   int,
 ) -> tuple[np.ndarray, int]:
     """
-    Kontrariánská combined strategie — vždy LONG nebo SHORT, nikdy cash po prvním vstupu.
-    FGI < entry AND jsme SHORT → přepni na LONG  (2 obchody)
-    FGI > exit  AND jsme LONG  → přepni na SHORT (2 obchody)
-    První vstup: FGI < entry → LONG, FGI > exit → SHORT, jinak čekej v cash.
+    Kontrariánská combined strategie.
+    Jde LONG při strachu (FGI < entry).
+    Jde SHORT při euforii (FGI > exit).
+    Jinak drží stávající pozici.
+
     Podmínka: entry < exit.
+
+    Short expozice je modelována jako zjednodušená syntetická -1x denní
+    návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
     """
-    cash        = float(INITIAL)
-    shares      = 0.0    # počet akcií v long pozici
-    invested    = 0.0    # hodnota short pozice (vstupní investice)
-    entry_price = 0.0    # vstupní cena short pozice
-    trades      = 0
-    equity      = np.empty(len(prices))
+    position = CASH
+    trades = 0
+    equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
 
     for i in range(len(prices) - 1):
-        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
-
         is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
 
-        if fg[i] < entry and invested > 0.0:
-            # Strach — přepni SHORT → LONG: uzavři short...
-            cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
-            invested    = 0.0
-            entry_price = 0.0
-            trades     += 1
-            if not is_last_execution:
-                # ...pak nakup long
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
 
-        elif fg[i] > exit and shares > 0.0:
-            # Euforie — přepni LONG → SHORT: prodej long...
-            cash    = shares * prices[i + 1] * (1 - FEE)
-            shares  = 0.0
-            trades += 1
-            if not is_last_execution:
-                # ...pak otevři short
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
 
-        elif shares == 0.0 and invested == 0.0 and not is_last_execution:
-            # Před prvním obchodem jsme v cash — čekáme na první signál (tato větev platí jen jednou)
-            if fg[i] < entry:
-                # První vstup: strach → jdi LONG
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-            elif fg[i] > exit:
-                # První vstup: euforie → jdi SHORT
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
-            # else: neutrální — zůstaň v cash a čekej dál
+        desired_position = position
+        if fg[i] < entry:
+            desired_position = LONG
+        elif fg[i] > exit:
+            desired_position = SHORT
 
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
+
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
+
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        trades += fee_units
+        position = next_position
+
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
             return equity, trades
 
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    elif invested > 0.0:
-        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
-    equity[-1] = cash
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
     return equity, trades
 
 
 # ---------------------------------------------------------------------------
-# Strategie 3 — trend_long
+# Strategie 3 - trend_long
 # ---------------------------------------------------------------------------
 
 def trend_long(
@@ -226,44 +285,86 @@ def trend_long(
 ) -> tuple[np.ndarray, int]:
     """
     Trendová long strategie.
-    Nakupuje při euforii (FGI > entry), prodává při strachu (FGI < exit).
+    Nakupuje při silném sentimentu (FGI > entry), prodává do cash při
+    slabém sentimentu (FGI < exit).
+
     Podmínka: entry > exit.
     """
-    cash   = float(INITIAL)
-    shares = 0.0
+    position = CASH
     trades = 0
     equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
 
     for i in range(len(prices) - 1):
-        equity[i] = cash + shares * prices[i]
         is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
 
-        # Nakup při euforii — trend pokračuje nahoru
-        if shares == 0.0 and fg[i] > entry and not is_last_execution:
-            shares  = cash * (1 - FEE) / prices[i + 1]
-            cash    = 0.0
-            trades += 1
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
 
-        # Prodej při strachu — trend se obrací dolů
-        elif shares > 0.0 and fg[i] < exit:
-            cash    = shares * prices[i + 1] * (1 - FEE)
-            shares  = 0.0
-            trades += 1
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
 
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
+        desired_position = position
+        if fg[i] > entry:
+            desired_position = LONG
+        elif fg[i] < exit:
+            desired_position = CASH
+
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
+
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
+
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        trades += fee_units
+        position = next_position
+
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
             return equity, trades
 
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
     return equity, trades
 
 
 # ---------------------------------------------------------------------------
-# Strategie 4 — trend_combined
+# Strategie 4 - trend_combined
 # ---------------------------------------------------------------------------
 
 def trend_combined(
@@ -273,85 +374,91 @@ def trend_combined(
     exit:   int,
 ) -> tuple[np.ndarray, int]:
     """
-    Trendová combined strategie — vždy LONG nebo SHORT, nikdy cash po prvním vstupu.
-    FGI > entry AND jsme SHORT → přepni na LONG  (2 obchody)
-    FGI < exit  AND jsme LONG  → přepni na SHORT (2 obchody)
-    První vstup: FGI > entry → LONG, FGI < exit → SHORT, jinak čekej v cash.
+    Trendová combined strategie.
+    Jde LONG při silném sentimentu (FGI > entry).
+    Jde SHORT při slabém sentimentu (FGI < exit).
+    Jinak drží stávající pozici.
+
     Podmínka: entry > exit.
+
+    Short expozice je modelována jako zjednodušená syntetická -1x denní
+    návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
     """
-    cash        = float(INITIAL)
-    shares      = 0.0    # počet akcií v long pozici
-    invested    = 0.0    # hodnota short pozice (vstupní investice)
-    entry_price = 0.0    # vstupní cena short pozice
-    trades      = 0
-    equity      = np.empty(len(prices))
+    position = CASH
+    trades = 0
+    equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
 
     for i in range(len(prices) - 1):
-        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
-
         is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
 
-        if fg[i] > entry and invested > 0.0:
-            # Euforie — přepni SHORT → LONG: uzavři short...
-            cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
-            invested    = 0.0
-            entry_price = 0.0
-            trades     += 1
-            if not is_last_execution:
-                # ...pak nakup long
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
 
-        elif fg[i] < exit and shares > 0.0:
-            # Strach — přepni LONG → SHORT: prodej long...
-            cash    = shares * prices[i + 1] * (1 - FEE)
-            shares  = 0.0
-            trades += 1
-            if not is_last_execution:
-                # ...pak otevři short
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
 
-        elif shares == 0.0 and invested == 0.0 and not is_last_execution:
-            # Před prvním obchodem jsme v cash — čekáme na první signál (tato větev platí jen jednou)
-            if fg[i] > entry:
-                # První vstup: euforie → jdi LONG
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-            elif fg[i] < exit:
-                # První vstup: strach → jdi SHORT
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
-            # else: neutrální — zůstaň v cash a čekej dál
+        desired_position = position
+        if fg[i] > entry:
+            desired_position = LONG
+        elif fg[i] < exit:
+            desired_position = SHORT
 
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
+
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
+
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        trades += fee_units
+        position = next_position
+
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
             return equity, trades
 
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    elif invested > 0.0:
-        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
-    equity[-1] = cash
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
     return equity, trades
 
 
 # ---------------------------------------------------------------------------
-# Strategie 5 — ma_long
+# Strategie 5 - ma_long
 # ---------------------------------------------------------------------------
 
 def ma_long(
@@ -361,60 +468,21 @@ def ma_long(
     slow:   int,
 ) -> tuple[np.ndarray, int]:
     """
-    MA crossover sentimentu — pouze long strategie.
-    Nakupuje když fast MA > slow MA, prodává do cash když fast MA < slow MA.
-    Při rovnosti MA drží stávající pozici. Nikdy nedrží short.
-    Warmup: prvních `slow` barů zůstává v cash (slow MA není ještě inicializována).
+    MA crossover sentimentu - pouze long strategie.
+    Jde LONG když fast MA > slow MA.
+    Jde do CASH když fast MA < slow MA.
+    Při rovnosti drží stávající pozici.
+
+    Warmup: zůstává v cash, dokud slow MA ještě neexistuje.
     """
-    # Předpočítej klouzavé průměry sentimentu — mimo smyčku
     ma_fast = pd.Series(fg).rolling(fast, min_periods=fast).mean().to_numpy()
     ma_slow = pd.Series(fg).rolling(slow, min_periods=slow).mean().to_numpy()
 
-    cash   = float(INITIAL)
-    shares = 0.0
-    trades = 0
-    equity = np.empty(len(prices))
-
-    for i in range(len(prices) - 1):
-        equity[i] = cash + shares * prices[i]
-        is_last_execution = i == len(prices) - 2
-
-        # Warmup — slow MA ještě nemá dostatek dat
-        if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            # Fast MA nad slow MA — sentiment roste, nakup pokud nejsme LONG
-            if shares == 0.0 and not is_last_execution:
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-            # else: už jsme LONG — nic neděláme
-
-        elif ma_fast[i] < ma_slow[i]:
-            # Fast MA pod slow MA — sentiment klesá, prodej do cash pokud jsme LONG
-            if shares > 0.0:
-                cash    = shares * prices[i + 1] * (1 - FEE)
-                shares  = 0.0
-                trades += 1
-            # else: už jsme v cash — nic neděláme
-
-        # else: fast MA == slow MA — drž stávající pozici beze změny
-
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
-            return equity, trades
-
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    equity[-1] = cash
-    return equity, trades
+    return _ma_long_from_arrays(prices, ma_fast, ma_slow)
 
 
 # ---------------------------------------------------------------------------
-# Strategie 6 — ma_combined
+# Strategie 6 - ma_combined
 # ---------------------------------------------------------------------------
 
 def ma_combined(
@@ -424,97 +492,191 @@ def ma_combined(
     slow:   int,
 ) -> tuple[np.ndarray, int]:
     """
-    MA crossover sentimentu — long+short strategie.
-    Nakupuje když fast MA > slow MA, shortuje když fast MA < slow MA.
-    Při rovnosti MA drží stávající pozici. Nikdy nedrží cash po inicializaci.
-    Warmup: prvních `slow` barů zůstává v cash (slow MA není ještě inicializována).
+    MA crossover sentimentu - long + short strategie.
+    Jde LONG když fast MA > slow MA.
+    Jde SHORT když fast MA < slow MA.
+    Při rovnosti drží stávající pozici.
+
+    Warmup: zůstává v cash, dokud slow MA ještě neexistuje.
+
+    Short expozice je modelována jako zjednodušená syntetická -1x denní
+    návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
     """
-    # Předpočítej klouzavé průměry sentimentu — mimo smyčku
     ma_fast = pd.Series(fg).rolling(fast, min_periods=fast).mean().to_numpy()
     ma_slow = pd.Series(fg).rolling(slow, min_periods=slow).mean().to_numpy()
 
-    cash        = float(INITIAL)
-    shares      = 0.0    # počet akcií v long pozici
-    invested    = 0.0    # hodnota short pozice (vstupní investice)
-    entry_price = 0.0    # vstupní cena short pozice
-    trades      = 0
-    equity      = np.empty(len(prices))
+    return _ma_combined_from_arrays(prices, ma_fast, ma_slow)
+
+
+def _ma_combined_from_arrays(
+    prices:  np.ndarray,
+    ma_fast: np.ndarray,
+    ma_slow: np.ndarray,
+) -> tuple[np.ndarray, int]:
+    """
+    Interní helper pro ma_combined a jeho OOS / plotting rekonstrukci.
+
+    Short expozice je modelována jako zjednodušená syntetická -1x denní
+    návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
+    """
+    position = CASH
+    trades = 0
+    equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
 
     for i in range(len(prices) - 1):
-        # Aktuální hodnota portfolia před případnou exekucí signálu na i+1
-        if shares > 0.0:
-            equity[i] = shares * prices[i]
-        elif invested > 0.0:
-            equity[i] = invested * (entry_price / prices[i])   # inverzní ETF model
-        else:
-            equity[i] = cash
-
         is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
 
-        # Warmup — slow MA ještě nemá dostatek dat
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        desired_position = position
         if np.isnan(ma_slow[i]):
-            continue
-
-        if ma_fast[i] > ma_slow[i]:
-            # Fast MA nad slow MA — sentiment roste, chceme být LONG
-
-            if invested > 0.0:
-                # Přechod SHORT → LONG: uzavři short...
-                cash        = invested * (entry_price / prices[i + 1]) * (1 - FEE)
-                invested    = 0.0
-                entry_price = 0.0
-                trades     += 1
-                if not is_last_execution:
-                    # ...a nakup long
-                    shares  = cash * (1 - FEE) / prices[i + 1]
-                    cash    = 0.0
-                    trades += 1
-
-            elif shares == 0.0 and not is_last_execution:
-                # První vstup do LONG po warmup
-                shares  = cash * (1 - FEE) / prices[i + 1]
-                cash    = 0.0
-                trades += 1
-
-            # else: už jsme LONG — nic neděláme
-
+            desired_position = CASH
+        elif ma_fast[i] > ma_slow[i]:
+            desired_position = LONG
         elif ma_fast[i] < ma_slow[i]:
-            # Fast MA pod slow MA — sentiment klesá, chceme být SHORT
+            desired_position = SHORT
 
-            if shares > 0.0:
-                # Přechod LONG → SHORT: prodej long...
-                cash    = shares * prices[i + 1] * (1 - FEE)
-                shares  = 0.0
-                trades += 1
-                if not is_last_execution:
-                    # ...a otevři short
-                    invested    = cash * (1 - FEE)
-                    entry_price = prices[i + 1]
-                    cash        = 0.0
-                    trades     += 1
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
 
-            elif invested == 0.0 and not is_last_execution:
-                # První vstup do SHORT po warmup
-                invested    = cash * (1 - FEE)
-                entry_price = prices[i + 1]
-                cash        = 0.0
-                trades     += 1
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
 
-            # else: už jsme SHORT — nic neděláme
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
 
-        # else: fast MA == slow MA — drž stávající pozici beze změny
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
 
-        # pojistka: pokud equity <= 0 (selhání strategie / bankrot) → ukonči backtest a vynuluj zbytek
-        if equity[i] <= 0.0:
-            equity[i:] = 0.0
+        trades += fee_units
+        position = next_position
+
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
             return equity, trades
 
-    # Uzavři pozici na konci období
-    if shares > 0.0:
-        cash = shares * prices[-1] * (1 - FEE)
-    elif invested > 0.0:
-        cash = invested * (entry_price / prices[-1]) * (1 - FEE)
-    equity[-1] = cash
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
+    return equity, trades
+
+
+def _ma_long_from_arrays(
+    prices:  np.ndarray,
+    ma_fast: np.ndarray,
+    ma_slow: np.ndarray,
+) -> tuple[np.ndarray, int]:
+    """
+    Interní helper pro ma_long a jeho OOS / plotting rekonstrukci.
+
+    Long expozice používá stejný position-based framework jako ostatní
+    strategie. Warmup explicitně drží cash a short větev se nepoužívá.
+    """
+    position = CASH
+    trades = 0
+    equity = np.empty(len(prices))
+    equity[0] = float(INITIAL)
+
+    for i in range(len(prices) - 1):
+        is_last_execution = i == len(prices) - 2
+        # Jsme v posledním dni smyčky, takže po tomto kroku už
+        # nebudeme otevírat novou pozici.
+
+        if position == CASH:
+            equity[i + 1] = equity[i]
+        elif position == LONG:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 + daily_return)
+        elif position == SHORT:
+            daily_return = (prices[i + 1] - prices[i]) / prices[i]
+            equity[i + 1] = equity[i] * (1.0 - daily_return)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        desired_position = position
+        if np.isnan(ma_slow[i]):
+            desired_position = CASH
+        elif ma_fast[i] > ma_slow[i]:
+            desired_position = LONG
+        elif ma_fast[i] < ma_slow[i]:
+            desired_position = CASH
+
+        if desired_position == position:
+            next_position = position
+        elif is_last_execution:
+            next_position = CASH
+        else:
+            next_position = desired_position
+
+        fee_units = 0
+        if position == CASH and next_position == LONG:
+            fee_units = 1
+        elif position == CASH and next_position == SHORT:
+            fee_units = 1
+        elif position == LONG and next_position == CASH:
+            fee_units = 1
+        elif position == SHORT and next_position == CASH:
+            fee_units = 1
+        elif position == LONG and next_position == SHORT:
+            fee_units = 2
+        elif position == SHORT and next_position == LONG:
+            fee_units = 2
+
+        if fee_units == 1:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+        elif fee_units == 2:
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+            equity[i + 1] = equity[i + 1] * (1.0 - FEE)
+
+        if equity[i + 1] < 0.0:
+            equity[i + 1] = 0.0
+
+        trades += fee_units
+        position = next_position
+
+        if equity[i + 1] <= 0.0:
+            equity[i + 1:] = 0.0
+            return equity, trades
+
+    if position != CASH:
+        equity[-1] = equity[-1] * (1.0 - FEE)
+        if equity[-1] < 0.0:
+            equity[-1] = 0.0
+
     return equity, trades
 
 
@@ -538,10 +700,10 @@ STRATEGIES: dict[str, callable] = {
 
 if __name__ == '__main__':
     rng = np.random.default_rng(42)
-    n   = 500
+    n = 500
 
     fake_prices = 100.0 * np.cumprod(1.0 + rng.normal(0.0003, 0.01, n))
-    fake_fg     = rng.uniform(0, 100, n)
+    fake_fg = rng.uniform(0, 100, n)
 
     print(f'{"Strategie":<25}  {"return":>8}  {"trades":>6}  {"sharpe":>7}  {"max_dd":>8}')
     print('-' * 60)
