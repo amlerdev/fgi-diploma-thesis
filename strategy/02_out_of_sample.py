@@ -43,6 +43,8 @@ def load_best_params(grid_path: Path) -> pd.DataFrame:
     podle IS total_return.
     """
     df = pd.read_csv(grid_path)
+    if 'transactions' not in df.columns and 'trades' in df.columns:
+        df = df.rename(columns={'trades': 'transactions'})
     best = (
         df.sort_values('total_return', ascending=False)
         .groupby(['strategy', 'fgi_col'], sort=False)
@@ -82,7 +84,7 @@ def run_oos(
         ma_fast_oos   = pd.Series(fg_full).rolling(fast, min_periods=fast).mean().to_numpy()[oos_start_idx:]
         ma_slow_oos   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_start_idx:]
 
-        eq, trades = _ma_combined_oos(prices_oos, ma_fast_oos, ma_slow_oos)
+        eq, transactions = _ma_combined_oos(prices_oos, ma_fast_oos, ma_slow_oos)
     elif strategy == 'ma_long':
         fast = int(row['fast'])
         slow = int(row['slow'])
@@ -92,13 +94,13 @@ def run_oos(
         ma_fast_oos   = pd.Series(fg_full).rolling(fast, min_periods=fast).mean().to_numpy()[oos_start_idx:]
         ma_slow_oos   = pd.Series(fg_full).rolling(slow, min_periods=slow).mean().to_numpy()[oos_start_idx:]
 
-        eq, trades = _ma_long_oos(prices_oos, ma_fast_oos, ma_slow_oos)
+        eq, transactions = _ma_long_oos(prices_oos, ma_fast_oos, ma_slow_oos)
     else:
         fg_oos = df_oos[fgi_col].to_numpy(dtype=float)
         params = {'entry': int(row['entry']), 'exit': int(row['exit'])}
-        eq, trades = fn(prices_oos, fg_oos, **params)
+        eq, transactions = fn(prices_oos, fg_oos, **params)
 
-    return compute_metrics(eq, trades)
+    return compute_metrics(eq, transactions)
 
 
 def _ma_combined_oos(
@@ -156,7 +158,7 @@ def main() -> None:
     records = []
     for _, row in best.iterrows():
         is_metrics  = {f'is_{k}':  v for k, v in row.items()
-                       if k in ('total_return', 'cagr', 'sharpe', 'max_dd', 'calmar', 'trades')}
+                       if k in ('total_return', 'cagr', 'sharpe', 'max_dd', 'calmar', 'transactions')}
         oos_metrics = run_oos(row, df_full, df_oos)
         oos_metrics = {f'oos_{k}': v for k, v in oos_metrics.items()}
 
@@ -181,16 +183,16 @@ def main() -> None:
     print(f'Uloženo: {out_path}')
 
     # ---- Srovnávací tabulka IS vs OOS -------------------------------------
-    SEP  = '=' * 100
-    SEP2 = '-' * 100
+    SEP  = '=' * 168
+    SEP2 = '-' * 168
     print(f'\n{SEP}')
     print('IS vs OOS — srovnání výkonnosti (TOP 3 per strategie × FGI)')
     print(SEP)
 
     hdr = (
         f'{"Strategie":<23}  {"FGI":<10}  {"Parametry":<20}'
-        f'  {"IS Return":>9}  {"IS Sharpe":>9}  {"IS MaxDD":>8}'
-        f'  {"OOS Return":>10}  {"OOS Sharpe":>10}  {"OOS MaxDD":>9}'
+        f'  {"IS Return":>9}  {"IS CAGR":>8}  {"IS Sharpe":>9}  {"IS Calmar":>9}  {"IS MaxDD":>8}  {"IS Trades":>9}'
+        f'  {"OOS Return":>10}  {"OOS CAGR":>9}  {"OOS Sharpe":>10}  {"OOS Calmar":>10}  {"OOS MaxDD":>9}  {"OOS Trades":>10}'
     )
     print(hdr)
     print(SEP2)
@@ -203,24 +205,24 @@ def main() -> None:
 
         print(
             f'{row["strategy"]:<23}  {row["fgi_col"]:<10}  {pstr:<20}'
-            f'  {row["is_total_return"]:>+8.1f}%  {row["is_sharpe"]:>+8.2f}'
-            f'  {row["is_max_dd"]:>+7.1f}%'
-            f'  {row["oos_total_return"]:>+9.1f}%  {row["oos_sharpe"]:>+9.2f}'
-            f'  {row["oos_max_dd"]:>+8.1f}%'
+            f'  {row["is_total_return"]:>+8.1f}%  {row["is_cagr"]:>+7.1f}%  {row["is_sharpe"]:>+8.2f}'
+            f'  {row["is_calmar"]:>+8.2f}  {row["is_max_dd"]:>+7.1f}%  {int(row["is_transactions"]):>9d}'
+            f'  {row["oos_total_return"]:>+9.1f}%  {row["oos_cagr"]:>+8.1f}%  {row["oos_sharpe"]:>+9.2f}'
+            f'  {row["oos_calmar"]:>+9.2f}  {row["oos_max_dd"]:>+8.1f}%  {int(row["oos_transactions"]):>10d}'
         )
 
     print(SEP2)
     print(
         f'{"Buy & Hold":<23}  {"IS":<10}  {"":<20}'
-        f'  {bh_is["total_return"]:>+8.1f}%  {bh_is["sharpe"]:>+8.2f}'
-        f'  {bh_is["max_dd"]:>+7.1f}%'
-        f'  {"":<10}  {"":<10}  {"":<9}'
+        f'  {bh_is["total_return"]:>+8.1f}%  {bh_is["cagr"]:>+7.1f}%  {bh_is["sharpe"]:>+8.2f}'
+        f'  {bh_is["calmar"]:>+8.2f}  {bh_is["max_dd"]:>+7.1f}%  {0:>9d}'
+        f'  {"":<10}  {"":<9}  {"":<10}  {"":<10}  {"":<9}  {"":<10}'
     )
     print(
         f'{"Buy & Hold":<23}  {"OOS":<10}  {"":<20}'
-        f'  {"":<9}  {"":<9}  {"":<8}'
-        f'  {bh_oos["total_return"]:>+9.1f}%  {bh_oos["sharpe"]:>+9.2f}'
-        f'  {bh_oos["max_dd"]:>+8.1f}%'
+        f'  {"":<9}  {"":<8}  {"":<9}  {"":<9}  {"":<8}  {"":<9}'
+        f'  {bh_oos["total_return"]:>+9.1f}%  {bh_oos["cagr"]:>+8.1f}%  {bh_oos["sharpe"]:>+9.2f}'
+        f'  {bh_oos["calmar"]:>+9.2f}  {bh_oos["max_dd"]:>+8.1f}%  {0:>10d}'
     )
     print(SEP)
 

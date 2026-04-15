@@ -6,7 +6,7 @@ výsledky do grid_results.csv. Paralelní výpočet přes všechna dostupná
 jádra pomocí joblib + tqdm progress bar.
 
 Výstup: grid_results.csv (strategy, fgi_col, entry, exit,
-        fast, slow, total_return, cagr, sharpe, max_dd, calmar, trades)
+        fast, slow, total_return, cagr, sharpe, max_dd, calmar, transactions)
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from config import (
     ENTRY_KONTR_RANGE, EXIT_KONTR_RANGE,
     ENTRY_TREND_RANGE, EXIT_TREND_RANGE,
     FGI_COLS, FAST_RANGE, INITIAL, INPUT,
-    IS_END, IS_START, MIN_TRADES,
+    IS_END, IS_START, MIN_TRANSACTIONS,
     SLOW_RANGE, STRATEGY_DIR,
 )
 from backtester import STRATEGIES, compute_metrics
@@ -104,18 +104,18 @@ def run_task(
 ) -> dict | None:
     """
     Spustí jeden backtest a vrátí dict výsledků.
-    Vrátí None pokud trades < MIN_TRADES (výsledek se vyfiltruje).
+    Vrátí None pokud transactions < MIN_TRANSACTIONS (výsledek se vyfiltruje).
 
     Data (prices, fg) jsou předávána jako argumenty —
     žádné globální proměnné ve workerech.
     """
     fn = STRATEGIES[strategy]
-    eq, trades = fn(prices, fg, **params)
+    eq, transactions = fn(prices, fg, **params)
 
-    if trades < MIN_TRADES:
+    if transactions < MIN_TRANSACTIONS:
         return None
 
-    m = compute_metrics(eq, trades)
+    m = compute_metrics(eq, transactions)
     return {
         'strategy': strategy,
         'fgi_col':  fgi_col,
@@ -195,7 +195,7 @@ def main() -> None:
 
     print(f'\nDokončeno za {elapsed:.1f}s')
     print(f'Výsledků celkem  : {n_total}')
-    print(f'Vyfiltrováno     : {n_filtered}  (trades < {MIN_TRADES})')
+    print(f'Vyfiltrováno     : {n_filtered}  (transactions < {MIN_TRANSACTIONS})')
     print(f'Zachováno        : {n_valid}')
 
     df_res   = pd.DataFrame(results)
@@ -204,13 +204,13 @@ def main() -> None:
     print(f'Uloženo          : {out_path}')
 
     # ---- TOP 1 per (strategie × FGI) podle total_return ------------------
-    SEP  = '=' * 86
-    SEP2 = '-' * 86
+    SEP  = '=' * 99
+    SEP2 = '-' * 99
     print(f'\n{SEP}')
     print('TOP 1 per (strategie × FGI varianta) — IS total_return')
     print(SEP)
     hdr = (f'{"Strategie":<23}  {"FGI":<10}  {"Parametry":<22}'
-           f'  {"Return%":>9}  {"CAGR%":>6}  {"Sharpe":>6}  {"MaxDD%":>7}  {"Trades":>6}')
+           f'  {"Return%":>9}  {"CAGR%":>6}  {"Sharpe":>6}  {"Calmar":>6}  {"MaxDD%":>7}  {"Transactions":>12}')
     print(hdr)
     print(SEP2)
 
@@ -227,14 +227,14 @@ def main() -> None:
         print(
             f'{row["strategy"]:<23}  {row["fgi_col"]:<10}  {pstr:<22}'
             f'  {row["total_return"]:>+8.1f}%  {row["cagr"]:>+5.1f}%'
-            f'  {row["sharpe"]:>+5.2f}  {row["max_dd"]:>+6.1f}%  {int(row["trades"]):>6d}'
+            f'  {row["sharpe"]:>+5.2f}  {row["calmar"]:>+5.2f}  {row["max_dd"]:>+6.1f}%  {int(row["transactions"]):>12d}'
         )
 
     print(SEP2)
     print(
         f'{"Buy & Hold":<23}  {"IS benchmark":<10}  {"":<22}'
         f'  {bh_metrics["total_return"]:>+8.1f}%  {bh_metrics["cagr"]:>+5.1f}%'
-        f'  {bh_metrics["sharpe"]:>+5.2f}  {bh_metrics["max_dd"]:>+6.1f}%  {"0":>6}'
+        f'  {bh_metrics["sharpe"]:>+5.2f}  {bh_metrics["calmar"]:>+5.2f}  {bh_metrics["max_dd"]:>+6.1f}%  {"0":>12}'
     )
     print(SEP)
 

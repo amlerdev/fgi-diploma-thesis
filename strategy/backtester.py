@@ -33,7 +33,7 @@ SHORT = -1
 # Výkonnostní metriky
 # ---------------------------------------------------------------------------
 
-def compute_metrics(equity: np.ndarray, trades: int) -> dict:
+def compute_metrics(equity: np.ndarray, transactions: int) -> dict:
     """
     Vypočítá výkonnostní metriky z equity křivky.
 
@@ -41,12 +41,12 @@ def compute_metrics(equity: np.ndarray, trades: int) -> dict:
     ---------
     equity : np.ndarray
         Denní hodnota portfolia.
-    trades : int
-        Celkový počet fee jednotek při změnách pozice.
+    transactions : int
+        Celkový počet transakčních jednotek při změnách pozice.
 
     Vrací
     -----
-    dict s klíči: total_return, cagr, sharpe, max_dd, calmar, trades
+    dict s klíči: total_return, cagr, sharpe, max_dd, calmar, transactions
     """
     n = len(equity)
     start_val = equity[0]
@@ -79,7 +79,7 @@ def compute_metrics(equity: np.ndarray, trades: int) -> dict:
         'sharpe':       sharpe,
         'max_dd':       max_dd,
         'calmar':       calmar,
-        'trades':       trades,
+        'transactions': transactions,
     }
 
 
@@ -100,7 +100,7 @@ def kontrarian_long(
     Podmínka: entry < exit.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -162,13 +162,13 @@ def kontrarian_long(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         # 5) Pokud equity spadne na nulu, backtest ukončíme.
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     # 6) Pokud jsme na konci stále v pozici, zavřeme ji za 1 fee.
     if position != CASH:
@@ -176,7 +176,7 @@ def kontrarian_long(
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ def kontrarian_combined(
     návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -258,19 +258,19 @@ def kontrarian_combined(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     if position != CASH:
         equity[-1] = equity[-1] * (1.0 - FEE)
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ def trend_long(
     Podmínka: entry > exit.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -348,19 +348,19 @@ def trend_long(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     if position != CASH:
         equity[-1] = equity[-1] * (1.0 - FEE)
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +385,7 @@ def trend_combined(
     návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -442,19 +442,19 @@ def trend_combined(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     if position != CASH:
         equity[-1] = equity[-1] * (1.0 - FEE)
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -518,9 +518,11 @@ def _ma_combined_from_arrays(
 
     Short expozice je modelována jako zjednodušená syntetická -1x denní
     návratnost. Model záměrně neobsahuje borrow cost ani financing cost.
+    Při rovnosti ma_fast == ma_slow se desired_position nemění, takže
+    strategie ponechává předchozí pozici beze změny.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -541,6 +543,8 @@ def _ma_combined_from_arrays(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
+        # Defaultně držíme předchozí pozici; při rovnosti MA tedy
+        # explicitně nedochází ke změně pozice.
         desired_position = position
         if np.isnan(ma_slow[i]):
             desired_position = CASH
@@ -579,19 +583,19 @@ def _ma_combined_from_arrays(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     if position != CASH:
         equity[-1] = equity[-1] * (1.0 - FEE)
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 def _ma_long_from_arrays(
@@ -604,9 +608,11 @@ def _ma_long_from_arrays(
 
     Long expozice používá stejný position-based framework jako ostatní
     strategie. Warmup explicitně drží cash a short větev se nepoužívá.
+    Při rovnosti ma_fast == ma_slow se desired_position nemění, takže
+    strategie ponechává předchozí pozici beze změny.
     """
     position = CASH
-    trades = 0
+    transactions = 0
     equity = np.empty(len(prices))
     equity[0] = float(INITIAL)
 
@@ -627,6 +633,8 @@ def _ma_long_from_arrays(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
+        # Defaultně držíme předchozí pozici; při rovnosti MA tedy
+        # explicitně nedochází ke změně pozice.
         desired_position = position
         if np.isnan(ma_slow[i]):
             desired_position = CASH
@@ -665,19 +673,19 @@ def _ma_long_from_arrays(
         if equity[i + 1] < 0.0:
             equity[i + 1] = 0.0
 
-        trades += fee_units
+        transactions += fee_units
         position = next_position
 
         if equity[i + 1] <= 0.0:
             equity[i + 1:] = 0.0
-            return equity, trades
+            return equity, transactions
 
     if position != CASH:
         equity[-1] = equity[-1] * (1.0 - FEE)
         if equity[-1] < 0.0:
             equity[-1] = 0.0
 
-    return equity, trades
+    return equity, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -705,16 +713,16 @@ if __name__ == '__main__':
     fake_prices = 100.0 * np.cumprod(1.0 + rng.normal(0.0003, 0.01, n))
     fake_fg = rng.uniform(0, 100, n)
 
-    print(f'{"Strategie":<25}  {"return":>8}  {"trades":>6}  {"sharpe":>7}  {"max_dd":>8}')
+    print(f'{"Strategie":<25}  {"return":>8}  {"transactions":>12}  {"sharpe":>7}  {"max_dd":>8}')
     print('-' * 60)
     for name, fn in STRATEGIES.items():
         if name in ('ma_long', 'ma_combined'):
-            eq, tr = fn(fake_prices, fake_fg, fast=10, slow=50)
+            eq, tx = fn(fake_prices, fake_fg, fast=10, slow=50)
         else:
-            eq, tr = fn(fake_prices, fake_fg, entry=25, exit=75)
-        m = compute_metrics(eq, tr)
+            eq, tx = fn(fake_prices, fake_fg, entry=25, exit=75)
+        m = compute_metrics(eq, tx)
         print(
-            f'{name:<25}  {m["total_return"]:>+7.1f}%  {m["trades"]:>6d}'
+            f'{name:<25}  {m["total_return"]:>+7.1f}%  {m["transactions"]:>12d}'
             f'  {m["sharpe"]:>+6.2f}  {m["max_dd"]:>+7.1f}%'
         )
 
