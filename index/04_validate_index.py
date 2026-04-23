@@ -1,12 +1,12 @@
 """
-validate_index.py
-=================
+04_validate_index.py
+====================
 Validace dvou variant indexu proti CNN Fear & Greed (2011–2026).
 
 Metriky: Pearson r, R², MAE, MBE, P90 absolutní chyby
-Výstup:  validation_chart.png (do code/index/)
+Výstup:  validation_chart.png a validation_timeseries.png (do code/index/)
 
-Vstup:  code/data/fgi_index_final.csv
+Vstup:  code/index/fgi_index_final.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -118,6 +118,31 @@ def zone_mbe(col):
         mbe_values.append((sub[col] - sub['CNN_FearGreed']).mean() if len(sub) > 0 else 0.0)
     return mbe_values
 
+
+def save_timeseries_chart(out_path):
+    """Export standalone time-series chart for thesis insertion."""
+    fig_ts, ax_ts = plt.subplots(figsize=(14, 5.8))
+
+    ax_ts.plot(ov_base.index, ov_base['CNN_FearGreed'],
+               color='black', linewidth=1.2, alpha=0.9,
+               label='CNN Fear & Greed (skutečný)', zorder=5)
+    for col, color, label in VARIANTS:
+        ov = get_overlap(col)
+        ax_ts.plot(ov.index, ov[col], color=color, linewidth=0.9, alpha=0.75,
+                   label=f"{label} (r={results[col]['r']:.3f})")
+
+    ax_ts.axhline(25, color='#F44336', linestyle='--', linewidth=0.9, alpha=0.4)
+    ax_ts.axhline(75, color='#4CAF50', linestyle='--', linewidth=0.9, alpha=0.4)
+    ax_ts.set_ylabel('Fear & Greed (0–100)')
+    ax_ts.set_title('Časová řada: CNN vs. rekonstrukce')
+    ax_ts.legend(fontsize=10, loc='upper left')
+    ax_ts.set_ylim(0, 100)
+    ax_ts.grid(True, alpha=0.3)
+
+    fig_ts.tight_layout()
+    fig_ts.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close(fig_ts)
+
 # ── Vizualizace ───────────────────────────────────────────────────────────────
 ov_base = get_overlap('FGI_Equal')
 
@@ -201,4 +226,9 @@ for i, (col, color, label) in enumerate(VARIANTS):
 out_chart = INDEX_DIR / 'validation_chart.png'
 plt.savefig(out_chart, dpi=150, bbox_inches='tight')
 print(f"\nGraf uložen: {out_chart}")
+
+out_timeseries = INDEX_DIR / 'validation_timeseries.png'
+save_timeseries_chart(out_timeseries)
+print(f"Časová řada uložena: {out_timeseries}")
+
 print("\nHotovo.")

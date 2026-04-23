@@ -2,6 +2,9 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import time
 import pandas as pd
+from pathlib import Path
+
+OUTPUT = Path(__file__).resolve().parent / 'fear_greed_historical.csv'
 
 options = Options()
 options.add_argument('--headless')
@@ -31,6 +34,6 @@ print(df_daily.head())
 df_daily['date'] = pd.to_datetime(df_daily.iloc[:, 0])
 df_daily = df_daily[df_daily['date'] >= '2011-01-01']
 
-df_daily.to_csv('fear_greed_historical.csv', index=False)
+df_daily.to_csv(OUTPUT, index=False)
 print(f"\nUloženo {len(df_daily)} záznamů od 2011-01-01")
 print(df_daily.tail())

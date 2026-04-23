@@ -16,6 +16,7 @@ import pandas as pd
 
 _dir = Path(__file__).resolve().parent
 BEST_WINDOW = 63  # ~3 měsíce — nejlepší korelace r=0.768
+END_DATE = '2026-03-20'
 
 # ── ČÁST 1: Download / načtení dat ───────────────────────────────────────────
 hy_csv = _dir / 'hy_oas_data.csv'
@@ -26,7 +27,7 @@ if hy_csv.exists():
 else:
     print("Stahuji ICE BofA HY OAS (BAMLH0A0HYM2) z FRED...")
     import pandas_datareader.data as web
-    hy = web.DataReader('BAMLH0A0HYM2', 'fred', '1996-01-01', '2026-12-31')
+    hy = web.DataReader('BAMLH0A0HYM2', 'fred', '1996-01-01', END_DATE)
     hy.columns = ['HY_OAS']
     hy.index.name = 'Date'
     hy = hy.dropna()

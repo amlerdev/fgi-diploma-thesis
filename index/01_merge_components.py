@@ -6,7 +6,7 @@ Krok 1/3: Merguje 7 normalizovaných komponent s S&P 500 a CNN daty.
 Vstupy:  code/components/*/  (*_normalized.csv)
          code/data/fear_greed_historical.csv
          Yahoo Finance (^SP500TR)
-Výstup:  code/data/fgi_dataset.csv
+Výstup:  code/index/fgi_dataset.csv
 
 Author: Petr Amler (AML0005)
 """

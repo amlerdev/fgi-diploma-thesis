@@ -11,7 +11,7 @@ Formule:
   - VIX - MA(n)  — rozdíl od MA (různá n)
   - VIX pct_change(n) — n-denní změna v %
 
-Celkem: 13 formulí × 3 metody × 12 oken = 468 kombinací
+Celkem: 12 formulí × 3 metody × 12 oken = 432 kombinací
 Výsledky se NEUKLÁDAJÍ — jen výpis do konzole.
 """
 

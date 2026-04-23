@@ -6,9 +6,9 @@ Krok 3/3: Aplikuje váhy a sestaví finální index se dvěma variantami.
   FGI_Equal  — průměr 7 komponent (1/7 každá)
   FGI_OLS    — OLS koeficienty + intercept, ořezáno na [0, 100]
 
-Vstup:   code/data/fgi_dataset.csv
-         code/data/fgi_weights.csv
-Výstup:  code/data/fgi_index_final.csv
+Vstup:   code/index/fgi_dataset.csv
+         code/index/fgi_weights.csv
+Výstup:  code/index/fgi_index_final.csv
 
 Author: Petr Amler (AML0005)
 """
@@ -79,4 +79,4 @@ df_out[out_cols].to_csv(OUTPUT)
 
 print(f"\nUloženo: {OUTPUT}")
 print(f"Sloupce: {out_cols}")
-print("\nHotovo — spust validate_index.py")
+print("\nHotovo — spust 04_validate_index.py")

@@ -43,13 +43,13 @@ def build_tasks() -> list[tuple[str, str, dict]]:
     """
     Vrátí seznam všech (strategy, fgi_col, params) kombinací.
 
-    Kontrariánské: entry ∈ ENTRY_KONTR_RANGE (1–48), exit ∈ EXIT_KONTR_RANGE (50–99)
-                   podmínka entry < exit vždy splněna (max entry=48 < 50=min exit).
-    Trendové:      entry ∈ ENTRY_TREND_RANGE (50–99), exit ∈ EXIT_TREND_RANGE (1–48)
-                   podmínka entry > exit vždy splněna (min entry=50 > 48=max exit).
-    MA combined:   fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (5–63)
+    Kontrariánské: entry ∈ ENTRY_KONTR_RANGE (1–49), exit ∈ EXIT_KONTR_RANGE (50–100)
+                   podmínka entry < exit vždy splněna (max entry=49 < 50=min exit).
+    Trendové:      entry ∈ ENTRY_TREND_RANGE (50–100), exit ∈ EXIT_TREND_RANGE (1–49)
+                   podmínka entry > exit vždy splněna (min entry=50 > 49=max exit).
+    MA combined:   fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (11–63)
                    podmínka fast < slow vynucena explicitně.
-    MA long:       fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (5–63)
+    MA long:       fast ∈ FAST_RANGE (1–10), slow ∈ SLOW_RANGE (11–63)
                    podmínka fast < slow vynucena explicitně.
     """
     tasks: list[tuple[str, str, dict]] = []

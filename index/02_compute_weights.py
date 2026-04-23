@@ -6,8 +6,8 @@ Krok 2/3: Výpočet vah pro dvě varianty indexu.
   Equal   — 1/7 pro každou komponentu (CNN metodika)
   OLS     — klasická OLS regrese (CNN FGI ~ 7 komponent), celý overlap 2011–2026
 
-Vstup:   code/data/fgi_dataset.csv
-Výstup:  code/data/fgi_weights.csv
+Vstup:   code/index/fgi_dataset.csv
+Výstup:  code/index/fgi_weights.csv
 
 Author: Petr Amler (AML0005)
 """
