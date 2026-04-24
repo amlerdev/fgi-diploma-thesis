@@ -121,26 +121,34 @@ def zone_mbe(col):
 
 def save_timeseries_chart(out_path):
     """Export standalone time-series chart for thesis insertion."""
-    fig_ts, ax_ts = plt.subplots(figsize=(14, 5.8))
+    fig_ts, ax_ts = plt.subplots(figsize=(20, 10.88))
 
     ax_ts.plot(ov_base.index, ov_base['CNN_FearGreed'],
-               color='black', linewidth=1.2, alpha=0.9,
+               color='black', linewidth=1.9, alpha=0.9,
                label='CNN Fear & Greed (skutečný)', zorder=5)
     for col, color, label in VARIANTS:
         ov = get_overlap(col)
-        ax_ts.plot(ov.index, ov[col], color=color, linewidth=0.9, alpha=0.75,
+        ax_ts.plot(ov.index, ov[col], color=color, linewidth=1.5, alpha=0.82,
                    label=f"{label} (r={results[col]['r']:.3f})")
 
-    ax_ts.axhline(25, color='#F44336', linestyle='--', linewidth=0.9, alpha=0.4)
-    ax_ts.axhline(75, color='#4CAF50', linestyle='--', linewidth=0.9, alpha=0.4)
-    ax_ts.set_ylabel('Fear & Greed (0–100)')
-    ax_ts.set_title('Časová řada: CNN vs. rekonstrukce')
-    ax_ts.legend(fontsize=10, loc='upper left')
+    ax_ts.axhline(25, color='#F44336', linestyle='--', linewidth=1.0, alpha=0.4)
+    ax_ts.axhline(75, color='#4CAF50', linestyle='--', linewidth=1.0, alpha=0.4)
+    ax_ts.set_ylabel('Fear & Greed (0–100)', fontsize=32)
+    ax_ts.set_title('Časová řada: CNN vs. rekonstrukce', fontsize=36, pad=26)
+    ax_ts.tick_params(axis='both', labelsize=28, width=2.0, length=8, colors='#222222')
+    ax_ts.legend(fontsize=26, loc='upper center',
+                 bbox_to_anchor=(0.5, -0.12), ncol=3, frameon=False,
+                 handlelength=4.0, handletextpad=1.0)
+    for line in ax_ts.get_legend().get_lines():
+        line.set_linewidth(5.0)
     ax_ts.set_ylim(0, 100)
-    ax_ts.grid(True, alpha=0.3)
+    ax_ts.grid(True, alpha=0.22)
+    for spine in ax_ts.spines.values():
+        spine.set_linewidth(2.0)
+        spine.set_color('#222222')
 
-    fig_ts.tight_layout()
-    fig_ts.savefig(out_path, dpi=150, bbox_inches='tight')
+    fig_ts.tight_layout(rect=[0, 0.08, 1, 1])
+    fig_ts.savefig(out_path, dpi=200, bbox_inches='tight')
     plt.close(fig_ts)
 
 # ── Vizualizace ───────────────────────────────────────────────────────────────
